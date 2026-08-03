@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Day Count</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#152018">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAADI0lEQVR4nO3cza0TMRhAUYPohh5ogTaQKIE1PVAPlbHgiSd+BC+5Ezwen7ONFHlx9c3Icfzq7cf3A+71evYCWJuASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQyZvZC3j29fOXv3z67tOH//YlZ1vMmZlAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQjoUf5+GOgyBPQQm9QzBPQI+9QzBHS4reoZAjrWbvUMAR1ow3rGqf6Vsa490/nOBKp2rmcIKNq8niGgQj1DQHdTz3cCuod6fhAQiYAe5Rp3J/yTgB5ik3qGgB5hn3qGgA63VT1DQMfarZ4hoANtWM8Q0FH2rGcI6BDb1jME9Ec3bTTvXM8Q0O/UcxMB/UQ9txLQM/XcQUBP1HMfAY3heEYgIPUkuweknmjrgNTT7RuQeg6xaUDqOcqOAannQNsFpJ5j7RWQeg63V0AvZKP55QT0K/XcREA/Uc+tBPRMPXcQ0BP13EdAY6gnEJB6kq3vSJROt+8EUs8hLhXQyzea1XOU6wSknikuEpB6ZrlCQOqZaPmA/MA+19oBqWe6VfeBpHMSS04g9ZzHegGp51QWC0g9Z7NSQOo5oWUCUs85LRMQ53SpgGw0/3/XCUg9U1wkIPXMcoWA1DPR8gGpZ661A1LPdAsHpJ4zWDUg9ZzEWQJyTfOiThGQetY1PyD1LG1yQOpZ3cyA1HMB0wJyPOMa5gSknsuYE5Dn0WVMe4Rp6BpmvkRr6ALm7wOxtMkBGUKrmz+BNLS0+QENDa3sFAENDS3rLAGxKAGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkr95+fD97DSzMBCIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIvkGwlmXclhMoIMAAAAASUVORK5CYII=">
+<style>
+:root{
+  --paper:#EDF0E7; --panel:#fff; --ink:#152018; --green:#2B6B4F;
+  --soft:#DFEAE1; --clay:#B4462F; --muted:#78877C; --line:#D6DDD1;
+  --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono: ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+  overscroll-behavior-y:none;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+button{font-family:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+#wrap{max-width:560px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top)) 14px 108px}
+
+.topbar{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
+.back{background:none;border:none;color:var(--green);font-size:15px;font-weight:600;padding:6px 4px}
+.btn{background:transparent;color:var(--ink);border:1px solid var(--line);
+  padding:11px 16px;border-radius:10px;font-size:15px;font-weight:600}
+.btn.sm{padding:8px 13px;font-size:14px}
+.btn.solid{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.danger{color:var(--clay);border-color:var(--clay)}
+.btn.wide{width:100%}
+
+.datestrip{display:flex;align-items:center;justify-content:space-between;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:14px}
+.arrow{background:none;border:none;font-size:26px;line-height:1;padding:4px 16px;color:var(--ink)}
+.arrow[disabled]{opacity:.25}
+.dlabel{text-align:center}
+.dlabel b{display:block;font-size:15px;font-weight:700}
+.dlabel span{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tile{display:block;width:100%;border:none;background:none;padding:0;text-align:left}
+.thumb{aspect-ratio:1/1;background:var(--soft) center/cover no-repeat;display:grid;place-items:center}
+.thumb i{font-style:normal;font-size:40px;font-weight:800;color:var(--green);opacity:.45}
+.tile .meta{padding:10px 12px 12px}
+.tile .meta b{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.tile .meta .amt{font-family:var(--mono);font-size:13px;color:var(--green);margin-top:2px}
+.tile .meta .sub{font-size:12px;color:var(--muted)}
+
+.cathead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.cathead .thumb{width:52px;height:52px;aspect-ratio:auto;border-radius:12px;flex:0 0 auto}
+.cathead .thumb i{font-size:17px}
+.cathead b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em}
+.cathead span{font-family:var(--mono);font-size:13px;color:var(--green)}
+
+.rows{display:grid;gap:8px}
+.row{display:block;width:100%;background:none;border:none;padding:13px 14px 12px;text-align:left}
+.rowtop{display:flex;align-items:baseline;gap:8px}
+.rowtop b{font-size:17px;font-weight:700;flex:1}
+.rowtop .price{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.stats{display:flex;gap:18px;margin-top:10px;align-items:flex-end}
+.stat .k{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stat .v{font-family:var(--mono);font-size:17px;font-weight:600}
+.stat.big .v{font-size:21px}
+.stat.left .v{color:var(--clay)}
+.spacer{flex:1}
+.rowamt{font-family:var(--mono);font-size:21px;font-weight:600;color:var(--green)}
+.bar{height:5px;border-radius:5px;background:var(--soft);margin-top:11px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--green);transition:width .25s ease}
+.hint{font-size:14px;color:var(--muted);margin-top:6px}
+
+.empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:28px 18px;text-align:center}
+.empty b{display:block;font-size:17px;font-weight:700;margin-bottom:4px}
+.empty p{font-size:14px;color:var(--muted);margin:0 0 14px}
+
+.totalbar{position:fixed;left:0;right:0;bottom:0;background:var(--ink);color:#fff;
+  padding:14px 18px calc(14px + env(safe-area-inset-bottom))}
+.totalbar .in{max-width:560px;margin:0 auto;display:flex;align-items:center}
+.totalbar .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;font-weight:600}
+.totalbar .d{font-size:12px;opacity:.55}
+.totalbar .v{font-family:var(--mono);font-size:28px;font-weight:600}
+
+.scrim{position:fixed;inset:0;background:rgba(21,32,24,.45);display:flex;align-items:flex-end;
+  justify-content:center;z-index:50}
+.sheet{background:var(--panel);width:100%;max-width:520px;border-radius:18px 18px 0 0;
+  padding:18px 18px calc(26px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto}
+.grab{width:38px;height:4px;border-radius:4px;background:var(--line);margin:0 auto 16px}
+.sheet h2{font-size:20px;font-weight:700;margin:0 0 16px}
+label.f{display:block}
+label.f .k{display:block;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);font-weight:600;margin-bottom:6px}
+label.f input{width:100%;padding:12px 14px;font-size:16px;font-weight:500;color:var(--ink);
+  background:var(--paper);border:1px solid var(--line);border-radius:10px;font-family:var(--sans)}
+label.f input.num{font-family:var(--mono);font-size:22px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.preview{background:var(--soft);border-radius:12px;padding:14px 16px;margin:16px 0;display:flex;align-items:center}
+.preview .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--green);font-weight:600}
+.preview .sold{font-family:var(--mono);font-size:26px;font-weight:600}
+.preview .calc{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.preview .amt{font-family:var(--mono);font-size:30px;font-weight:600;color:var(--green)}
+.actions{display:flex;gap:10px;margin-top:18px;align-items:center}
+.photo{height:150px;border-radius:12px;background:var(--soft) center/cover no-repeat;
+  display:grid;place-items:center;margin-bottom:12px;color:var(--muted);font-size:14px}
+.filebtn{display:block;text-align:center;padding:11px 16px;border:1px solid var(--line);
+  border-radius:10px;font-size:15px;font-weight:600}
+.notice{background:#FBE9E4;border:1px solid var(--clay);color:var(--clay);border-radius:10px;
+  padding:10px 12px;font-size:14px;margin-bottom:14px}
+.install{position:fixed;left:14px;right:14px;bottom:calc(88px + env(safe-area-inset-bottom));
+  max-width:532px;margin:0 auto;background:var(--panel);border:1px solid var(--green);
+  border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;z-index:40;
+  box-shadow:0 6px 20px rgba(21,32,24,.14)}
+.install p{margin:0;flex:1;font-size:14px;font-weight:500}
+</style>
+</head>
+<body>
+<div id="wrap"></div>
+<div id="bar"></div>
+<div id="modal"></div>
+<div id="install"></div>
+
+<script>
+/* ---------------- state ---------------- */
+var DEFAULTS = {
+  categories: [
+    { id:"ol", name:"OL", image:null },
+    { id:"cg", name:"CG", image:null }
+  ],
+  items: []
+};
+
+var config, days, notice = "";
+var view = { cat:null, editing:false, date:todayKey(), sheet:null, draft:null };
+var deferredInstall = null;
+
+function todayKey(){ return keyOf(new Date()); }
+function keyOf(d){
+  var p = function(n){ return String(n).padStart(2,"0"); };
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+}
+function shift(key, delta){
+  var a = key.split("-").map(Number);
+  return keyOf(new Date(a[0], a[1]-1, a[2]+delta));
+}
+function pretty(key){
+  if (key === todayKey()) return "Today";
+  var a = key.split("-").map(Number);
+  return new Date(a[0],a[1]-1,a[2])
+    .toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+}
+function money(n){
+  return Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+
+/* ---------------- storage ---------------- */
+function load(){
+  try { config = JSON.parse(localStorage.getItem("daycount:config")) || DEFAULTS; }
+  catch(e){ config = DEFAULTS; }
+  try { days = JSON.parse(localStorage.getItem("daycount:days")) || {}; }
+  catch(e){ days = {}; }
+}
+function saveConfig(){
+  try { localStorage.setItem("daycount:config", JSON.stringify(config)); notice=""; }
+  catch(e){ notice = "Storage is full. Remove a group photo to free up space."; }
+}
+function saveDays(){
+  try { localStorage.setItem("daycount:days", JSON.stringify(days)); notice=""; }
+  catch(e){ notice = "Couldn't save that count. Storage is full."; }
+}
+
+/* ---------------- math ---------------- */
+function entriesFor(){ return days[view.date] || {}; }
+function calc(item){
+  var e = entriesFor()[item.id] || {};
+  var inQty = Number(e.inQty) || 0;
+  var left  = Number(e.outQty) || 0;
+  var counted = e.inQty !== undefined && e.inQty !== "";
+  var sold = Math.max(0, inQty - left);
+  return { inQty:inQty, left:left, sold:sold, counted:counted, amount: sold * (Number(item.price)||0) };
+}
+function catTotal(id){
+  return config.items.filter(function(i){ return i.catId===id; })
+    .reduce(function(s,i){ return s + calc(i).amount; }, 0);
+}
+function grandTotal(){
+  return config.items.reduce(function(s,i){ return s + calc(i).amount; }, 0);
+}
+
+/* ---------------- image ---------------- */
+function shrink(file, cb, onErr){
+  var r = new FileReader();
+  r.onerror = function(){ onErr("Could not read that image."); };
+  r.onload = function(){
+    var img = new Image();
+    img.onerror = function(){ onErr("Could not open that image."); };
+    img.onload = function(){
+      var max = 520, s = Math.min(1, max/Math.max(img.width,img.height));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.width*s); c.height = Math.round(img.height*s);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      cb(c.toDataURL("image/jpeg", 0.72));
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(file);
+}
+
+/* ---------------- render ---------------- */
+function thumbStyle(img){ return img ? ' style="background-image:url('+img+')"' : ""; }
+
+function render(){
+  var wrap = document.getElementById("wrap");
+  var cat = config.categories.filter(function(k){ return k.id===view.cat; })[0] || null;
+  var h = "";
+
+  h += '<div class="topbar">';
+  h += cat
+    ? '<button class="back" data-a="home">&#8592; All groups</button>'
+    : "<h1>Day Count</h1>";
+  h += '<div class="spacer"></div>';
+  h += '<button class="btn sm'+(view.editing?" solid":"")+'" data-a="toggle-edit">'+
+       (view.editing?"Done":"Edit")+"</button></div>";
+
+  var isToday = view.date >= todayKey();
+  h += '<div class="datestrip">'+
+       '<button class="arrow" data-a="prev">&#8249;</button>'+
+       '<div class="dlabel"><b>'+pretty(view.date)+"</b><span>"+view.date+"</span></div>"+
+       '<button class="arrow" data-a="next"'+(isToday?" disabled":"")+'>&#8250;</button></div>';
+
+  if (notice) h += '<div class="notice">'+esc(notice)+"</div>";
+
+  if (!cat){
+    h += '<div class="grid">';
+    config.categories.forEach(function(k){
+      h += '<div class="card"><button class="tile" data-a="'+(view.editing?"edit-cat":"open-cat")+'" data-id="'+k.id+'">'+
+           '<div class="thumb"'+thumbStyle(k.image)+">"+
+           (k.image?"":"<i>"+esc(k.name.slice(0,2).toUpperCase())+"</i>")+"</div>"+
+           '<div class="meta"><b>'+esc(k.name)+"</b>"+
+           '<div class="amt">'+money(catTotal(k.id))+"</div>"+
+           '<div class="sub">'+config.items.filter(function(i){return i.catId===k.id;}).length+" items</div>"+
+           "</div></button>";
+      if (view.editing)
+        h += '<div style="padding:0 12px 12px"><button class="btn wide" style="padding:8px;font-size:13px" data-a="edit-cat" data-id="'+k.id+'">Edit group</button></div>';
+      h += "</div>";
+    });
+    h += "</div>";
+    if (view.editing) h += '<button class="btn wide" style="margin-top:12px" data-a="add-cat">+ Add a group</button>';
+  } else {
+    h += '<div class="cathead"><div class="thumb"'+thumbStyle(cat.image)+">"+
+         (cat.image?"":"<i>"+esc(cat.name.slice(0,2).toUpperCase())+"</i>")+"</div>"+
+         "<div><b>"+esc(cat.name)+"</b><span>"+money(catTotal(cat.id))+" today</span></div></div>";
+
+    var items = config.items.filter(function(i){ return i.catId===cat.id; });
+    if (!items.length){
+      h += '<div class="empty"><b>No items here yet</b><p>Add your first item and set its price.</p>'+
+           '<button class="btn solid" data-a="new-item">Add an item</button></div>';
+    } else {
+      h += '<div class="rows">';
+      items.forEach(function(item){
+        var c = calc(item);
+        var pct = c.inQty>0 ? Math.min(100, c.sold/c.inQty*100) : 0;
+        h += '<div class="card"><button class="row" data-a="'+(view.editing?"edit-item":"count")+'" data-id="'+item.id+'">'+
+             '<div class="rowtop"><b>'+esc(item.name)+'</b><span class="price">@ '+money(item.price)+"</span></div>";
+        if (c.counted){
+          h += '<div class="stats">'+
+               '<div class="stat"><div class="k">In</div><div class="v">'+c.inQty+"</div></div>"+
+               '<div class="stat left"><div class="k">Left</div><div class="v">'+c.left+"</div></div>"+
+               '<div class="stat big"><div class="k">Sold</div><div class="v">'+c.sold+"</div></div>"+
+               '<div class="spacer"></div><div class="rowamt">'+money(c.amount)+"</div></div>"+
+               '<div class="bar"><i style="width:'+pct+'%"></i></div>';
+        } else {
+          h += '<div class="hint">'+(view.editing?"Tap to rename or change the price":"Tap to enter today's count")+"</div>";
+        }
+        h += "</button></div>";
+      });
+      h += "</div>";
+      h += '<button class="btn wide" style="margin-top:12px" data-a="new-item">+ Add an item</button>';
+    }
+  }
+
+  wrap.innerHTML = h;
+
+  document.getElementById("bar").innerHTML =
+    '<div class="totalbar"><div class="in"><div>'+
+    '<div class="k">'+(cat?esc(cat.name)+" total":"Day total")+"</div>"+
+    '<div class="d">'+pretty(view.date)+"</div></div>"+
+    '<div class="spacer"></div><div class="v">'+money(cat?catTotal(cat.id):grandTotal())+"</div></div></div>";
+
+  renderSheet();
+  renderInstall();
+}
+
+function renderSheet(){
+  var m = document.getElementById("modal");
+  var s = view.sheet;
+  if (!s){ m.innerHTML = ""; return; }
+  var h = '<div class="scrim" data-a="close-scrim"><div class="sheet" data-stop="1"><div class="grab"></div>';
+
+  if (s.kind === "count"){
+    var item = config.items.filter(function(i){ return i.id===s.id; })[0];
+    var e = entriesFor()[item.id] || {};
+    h += "<h2>"+esc(item.name)+"</h2>"+
+         '<div class="two">'+
+         '<label class="f"><span class="k">In &mdash; opening count</span>'+
+         '<input id="f-in" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.inQty!==undefined?e.inQty:"")+'"></label>'+
+         '<label class="f"><span class="k">Out &mdash; left at close</span>'+
+         '<input id="f-out" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.outQty!==undefined?e.outQty:"")+'"></label>'+
+         "</div>"+
+         '<div class="preview"><div><div class="k">Sold</div>'+
+         '<div class="sold" id="p-sold">0</div><div class="calc" id="p-calc"></div></div>'+
+         '<div class="spacer"></div><div class="amt" id="p-amt">0.00</div></div>'+
+         '<div class="actions"><button class="btn" style="flex:1" data-a="close">Cancel</button>'+
+         '<button class="btn solid" style="flex:2" data-a="save-count" data-id="'+item.id+'">Save count</button></div>';
+  }
+
+  if (s.kind === "item"){
+    var it = s.id ? config.items.filter(function(i){ return i.id===s.id; })[0] : null;
+    h += "<h2>"+(it?"Edit item":"New item")+"</h2>"+
+         '<div style="display:grid;gap:12px">'+
+         '<label class="f"><span class="k">Item name</span>'+
+         '<input id="f-name" placeholder="e.g. ML" value="'+esc(it?it.name:"")+'"></label>'+
+         '<label class="f"><span class="k">Price per piece</span>'+
+         '<input id="f-price" class="num" inputmode="decimal" placeholder="0.00" value="'+esc(it?it.price:"")+'"></label>'+
+         "</div>"+
+         '<div class="actions">'+
+         (it?'<button class="btn danger" data-a="del-item" data-id="'+it.id+'">Delete</button>':"")+
+         '<div class="spacer"></div><button class="btn" data-a="close">Cancel</button>'+
+         '<button class="btn solid" data-a="save-item" data-id="'+(it?it.id:"")+'">Save</button></div>';
+  }
+
+  if (s.kind === "cat"){
+    var k = config.categories.filter(function(c){ return c.id===s.id; })[0];
+    var img = view.draft && view.draft.image !== undefined ? view.draft.image : k.image;
+    h += "<h2>Edit group</h2>"+
+         '<div class="photo" id="p-photo"'+(img?' style="background-image:url('+img+')"':"")+">"+
+         (img?"":"No photo yet")+"</div>"+
+         '<div style="display:flex;gap:10px;margin-bottom:14px">'+
+         '<label class="filebtn" style="flex:1"><input type="file" accept="image/*" id="f-photo" hidden>'+
+         (img?"Change photo":"Choose photo")+"</label>"+
+         (img?'<button class="btn" data-a="clear-photo">Remove</button>':"")+"</div>"+
+         '<label class="f"><span class="k">Group name</span>'+
+         '<input id="f-catname" placeholder="OL" value="'+esc(k.name)+'"></label>'+
+         '<div class="actions">'+
+         (config.categories.length>1?'<button class="btn danger" data-a="del-cat" data-id="'+k.id+'">Delete</button>':"")+
+         '<div class="spacer"></div><button class="btn" data-a="close">Cancel</button>'+
+         '<button class="btn solid" data-a="save-cat" data-id="'+k.id+'">Save</button></div>';
+  }
+
+  m.innerHTML = h + "</div></div>";
+
+  if (s.kind === "count"){
+    var fin = document.getElementById("f-in"), fout = document.getElementById("f-out");
+    var itm = config.items.filter(function(i){ return i.id===s.id; })[0];
+    var upd = function(){
+      var sold = Math.max(0,(Number(fin.value)||0)-(Number(fout.value)||0));
+      document.getElementById("p-sold").textContent = sold;
+      document.getElementById("p-calc").textContent = sold+" \u00d7 "+money(itm.price);
+      document.getElementById("p-amt").textContent = money(sold*(Number(itm.price)||0));
+    };
+    fin.addEventListener("input",upd); fout.addEventListener("input",upd); upd();
+    setTimeout(function(){ fin.focus(); },50);
+  }
+  if (s.kind === "item") setTimeout(function(){ document.getElementById("f-name").focus(); },50);
+  if (s.kind === "cat"){
+    document.getElementById("f-photo").addEventListener("change", function(ev){
+      var f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      shrink(f, function(data){
+        view.draft = view.draft || {};
+        view.draft.image = data;
+        view.draft.name = document.getElementById("f-catname").value;
+        renderSheet();
+      }, function(msg){ notice = msg; render(); });
+    });
+  }
+}
+
+function renderInstall(){
+  var el = document.getElementById("install");
+  el.innerHTML = deferredInstall
+    ? '<div class="install"><p>Add Day Count to your home screen</p>'+
+      '<button class="btn sm" data-a="dismiss-install">Not now</button>'+
+      '<button class="btn sm solid" data-a="do-install">Install</button></div>'
+    : "";
+}
+
+/* ---------------- events ---------------- */
+document.addEventListener("click", function(ev){
+  var t = ev.target.closest("[data-a]");
+  if (!t) return;
+  var a = t.dataset.a, id = t.dataset.id;
+
+  if (a === "close-scrim" && ev.target !== t) return;
+
+  switch(a){
+    case "home":        view.cat = null; view.editing = false; break;
+    case "toggle-edit": view.editing = !view.editing; break;
+    case "prev":        view.date = shift(view.date,-1); break;
+    case "next":        if (view.date < todayKey()) view.date = shift(view.date,1); break;
+    case "open-cat":    view.cat = id; break;
+    case "edit-cat":    view.draft = null; view.sheet = {kind:"cat", id:id}; break;
+    case "add-cat":
+      config.categories.push({ id:uid(), name:"New group", image:null }); saveConfig(); break;
+    case "count":       view.sheet = {kind:"count", id:id}; break;
+    case "edit-item":   view.sheet = {kind:"item", id:id}; break;
+    case "new-item":    view.sheet = {kind:"item", id:null}; break;
+    case "close": case "close-scrim": view.sheet = null; view.draft = null; break;
+
+    case "save-count":
+      var iv = document.getElementById("f-in").value;
+      var ov = document.getElementById("f-out").value;
+      days[view.date] = days[view.date] || {};
+      days[view.date][id] = { inQty: iv, outQty: ov };
+      saveDays(); view.sheet = null; break;
+
+    case "save-item":
+      var nm = document.getElementById("f-name").value.trim();
+      var pr = Number(document.getElementById("f-price").value) || 0;
+      if (!nm) return;
+      if (id){
+        config.items = config.items.map(function(i){
+          return i.id===id ? {id:i.id,catId:i.catId,name:nm,price:pr} : i; });
+      } else {
+        config.items.push({ id:uid(), catId:view.cat, name:nm, price:pr });
+      }
+      saveConfig(); view.sheet = null; break;
+
+    case "del-item":
+      config.items = config.items.filter(function(i){ return i.id!==id; });
+      saveConfig(); view.sheet = null; break;
+
+    case "clear-photo":
+      view.draft = view.draft || {};
+      view.draft.image = null;
+      view.draft.name = document.getElementById("f-catname").value;
+      renderSheet(); return;
+
+    case "save-cat":
+      var cname = document.getElementById("f-catname").value.trim();
+      var cimg = view.draft && view.draft.image !== undefined ? view.draft.image : undefined;
+      config.categories = config.categories.map(function(k){
+        if (k.id !== id) return k;
+        return { id:k.id, name: cname || k.name, image: cimg !== undefined ? cimg : k.image };
+      });
+      saveConfig(); view.sheet = null; view.draft = null; break;
+
+    case "del-cat":
+      config.categories = config.categories.filter(function(k){ return k.id!==id; });
+      config.items = config.items.filter(function(i){ return i.catId!==id; });
+      saveConfig(); view.sheet = null; if (view.cat===id) view.cat = null; break;
+
+    case "do-install":
+      if (deferredInstall){ deferredInstall.prompt(); deferredInstall = null; }
+      break;
+    case "dismiss-install": deferredInstall = null; break;
+  }
+  render();
+});
+
+window.addEventListener("beforeinstallprompt", function(e){
+  e.preventDefault(); deferredInstall = e; renderInstall();
+});
+window.addEventListener("appinstalled", function(){ deferredInstall = null; renderInstall(); });
+
+/* roll the date over if the app sits open past midnight */
+document.addEventListener("visibilitychange", function(){
+  if (!document.hidden && view.date < todayKey() && !view.sheet){ view.date = todayKey(); render(); }
+});
+
+load();
+render();
+
+if ("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
