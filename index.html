@@ -501,7 +501,8 @@ function renderSheet(){
          '<input id="f-out" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.outQty)+'"></label>'+
          "</div>"+
          '<div class="soldwrap"><label class="f" id="w-sold"><span class="k">Sold</span>'+
-         '<input id="f-sold" class="num" inputmode="decimal" placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
+         '<input id="f-sold" class="num" inputmode="decimal" enterkeyhint="done" '+
+         'placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
          '<div class="preview"><div><div class="k">Amount</div>'+
          '<div class="calc" id="p-calc"></div></div>'+
          '<div class="spacer"></div><div class="amt" id="p-amt">0.00</div></div>'+
@@ -606,6 +607,11 @@ function wireCount(itemId){
   fsold.addEventListener("input", function(){ lock = "sold"; fromSold(); });
   fin.addEventListener("input", fromIn);
 
+  /* Sold is the last box, so its go arrow saves and shuts the sheet */
+  fsold.addEventListener("keydown", function(ev){
+    if (ev.key === "Enter"){ ev.preventDefault(); fsold.blur(); saveCount(itemId); }
+  });
+
   paint();
   setTimeout(function(){ fin.focus(); }, 50);
 }
@@ -617,6 +623,20 @@ function renderInstall(){
       '<button class="btn sm" data-a="dismiss-install">Not now</button>'+
       '<button class="btn sm solid" data-a="do-install">Install</button></div>'
     : "";
+}
+
+function saveCount(id){
+  var fin = document.getElementById("f-in");
+  if (!fin) return;
+  days[view.date] = days[view.date] || {};
+  days[view.date][id] = {
+    inQty:   fin.value,
+    outQty:  document.getElementById("f-out").value,
+    soldQty: document.getElementById("f-sold").value
+  };
+  saveDays();
+  view.sheet = null;
+  render();
 }
 
 /* ---------------- events ---------------- */
@@ -641,13 +661,7 @@ document.addEventListener("click", function(ev){
     case "new-item":    view.sheet = {kind:"item", id:null}; break;
     case "close": case "close-scrim": view.sheet = null; view.draft = null; break;
 
-    case "save-count":
-      var iv = document.getElementById("f-in").value;
-      var ov = document.getElementById("f-out").value;
-      var sv = document.getElementById("f-sold").value;
-      days[view.date] = days[view.date] || {};
-      days[view.date][id] = { inQty: iv, outQty: ov, soldQty: sv };
-      saveDays(); view.sheet = null; break;
+    case "save-count": saveCount(id); break;
 
     case "save-item":
       var nm = document.getElementById("f-name").value.trim();
