@@ -242,7 +242,8 @@ function catTotal(id){
     .reduce(function(s,i){ return s + calc(i).amount; }, 0);
 }
 function grandTotal(){
-  return config.items.reduce(function(s,i){ return s + calc(i).amount; }, 0);
+  var items = config.items.reduce(function(s,i){ return s + calc(i).amount; }, 0);
+  return items + (Number(sheetFor().totalSale) || 0);
 }
 function reportTotal(){
   var s = sheetFor();
@@ -314,7 +315,7 @@ function render(){
     REPORT_ROWS.forEach(function(r){
       h += '<div class="sheetrow"><label for="r-'+r.id+'">'+r.label+"</label>"+
            '<input id="r-'+r.id+'" class="rin" data-k="'+r.id+'" inputmode="decimal" '+
-           'placeholder="0.00" value="'+esc(s[r.id])+'"></div>';
+           'enterkeyhint="done" placeholder="0.00" value="'+esc(s[r.id])+'"></div>';
     });
     h += '<div class="sheetrow tot"><label>TOTAL AMOUNTS</label>'+
          '<div class="v" id="r-total">'+money(reportTotal())+"</div></div></div>";
@@ -347,8 +348,8 @@ function render(){
     if (view.editing) h += '<button class="btn wide" style="margin-top:12px" data-a="add-cat">+ Add a group</button>';
 
     h += '<div class="salecard"><div class="k">Total sale</div>'+
-         '<input id="totalsale" inputmode="decimal" placeholder="0.00" value="'+
-         esc(sheetFor().totalSale)+'"></div>';
+         '<input id="totalsale" inputmode="decimal" enterkeyhint="done" '+
+         'placeholder="0.00" value="'+esc(sheetFor().totalSale)+'"></div>';
   }
 
   /* ---- inside a category ---- */
@@ -414,6 +415,9 @@ function wireReport(){
       document.getElementById("r-total").textContent = money(reportTotal());
       renderBar(null);
     });
+    el.addEventListener("keydown", function(ev){
+      if (ev.key === "Enter"){ ev.preventDefault(); el.blur(); }
+    });
   });
 }
 
@@ -424,6 +428,11 @@ function wireTotalSale(){
     sheets[view.date] = sheets[view.date] || {};
     sheets[view.date].totalSale = el.value;
     saveSheets();
+    renderBar(null);          /* day total keeps up as you type */
+  });
+  /* Enter / the go arrow just tucks the keyboard away - no navigating off */
+  el.addEventListener("keydown", function(ev){
+    if (ev.key === "Enter"){ ev.preventDefault(); el.blur(); }
   });
 }
 
