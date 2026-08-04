@@ -387,6 +387,8 @@ function render(){
          'placeholder="0.00" value="'+esc(sheetFor().totalSale)+'"></div>';
     h += '<button class="btn wide" style="margin-top:12px" data-a="out-list">'+
          "View all Out counts</button>";
+    h += '<button class="btn wide" style="margin-top:8px" data-a="backup">'+
+         "Backup &amp; restore</button>";
   }
 
   /* ---- inside a category ---- */
@@ -521,16 +523,23 @@ function renderSheet(){
     var c0 = calc(item);
     var soldStart = has(e.soldQty) ? e.soldQty
                   : (has(e.outQty) ? c0.sold : "");
+    var inStart = e.inQty, carried = null;
+    if (!has(inStart)){
+      carried = carryIn(item.id);
+      if (carried) inStart = carried.qty;
+    }
     h += "<h2>"+esc(item.name)+"</h2>"+
          '<div class="two">'+
          '<label class="f"><span class="k">In &mdash; opening</span>'+
-         '<input id="f-in" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.inQty)+'"></label>'+
+         '<input id="f-in" class="num" inputmode="decimal" placeholder="0" value="'+esc(inStart)+'"></label>'+
          '<label class="f" id="w-out"><span class="k">Out &mdash; left</span>'+
          '<input id="f-out" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.outQty)+'"></label>'+
          "</div>"+
          '<div class="soldwrap"><label class="f" id="w-sold"><span class="k">Sold</span>'+
          '<input id="f-sold" class="num" inputmode="decimal" enterkeyhint="done" '+
          'placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
+         (carried ? '<p class="note" style="margin-top:8px">Opening count carried over from '+
+            pretty(carried.date)+"'s closing figure. Change it if the shelf says otherwise.</p>" : "")+
          '<div class="preview"><div><div class="k">Amount</div>'+
          '<div class="calc" id="p-calc"></div></div>'+
          '<div class="spacer"></div><div class="amt" id="p-amt">0.00</div></div>'+
@@ -561,6 +570,32 @@ function renderSheet(){
          "counted today.</p>"+
          '<div class="actions"><div class="spacer"></div>'+
          '<button class="btn solid" data-a="close">Close</button></div>';
+  }
+
+  if (s.kind === "backup"){
+    var nDays = Object.keys(days).length;
+    h += "<h2>Backup &amp; restore</h2>";
+    if (view.pending){
+      var p = view.pending;
+      h += '<p class="note" style="margin:0 0 14px">This file holds '+
+           p.items+" items, "+p.cats+" groups and "+p.days+
+           " days of counts. Restoring wipes everything currently on this device and "+
+           "puts the file's contents in its place.</p>"+
+           '<div class="actions"><button class="btn" data-a="cancel-restore">Cancel</button>'+
+           '<div class="spacer"></div>'+
+           '<button class="btn danger" data-a="do-restore">Replace everything</button></div>';
+    } else {
+      h += '<p class="note" style="margin:0 0 14px">Counts live on this phone only. To move '+
+           "them to another device, save a backup here and restore it there. "+
+           "Currently holding "+config.items.length+" items across "+config.categories.length+
+           " groups, and "+nDays+" day"+(nDays===1?"":"s")+" of counts.</p>"+
+           '<button class="btn wide solid" data-a="do-export">Save a backup file</button>'+
+           '<label class="filebtn" style="margin-top:8px">'+
+           '<input type="file" accept="application/json,.json" id="f-restore" hidden>'+
+           "Restore from a backup file</label>"+
+           '<div class="actions"><div class="spacer"></div>'+
+           '<button class="btn" data-a="close">Close</button></div>';
+    }
   }
 
   if (s.kind === "item"){
@@ -599,6 +634,32 @@ function renderSheet(){
   m.innerHTML = h + "</div></div>";
 
   if (s.kind === "count") wireCount(s.id);
+  if (s.kind === "backup"){
+    var fr = document.getElementById("f-restore");
+    if (fr) fr.addEventListener("change", function(ev){
+      var file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      var rd = new FileReader();
+      rd.onerror = function(){ notice = "Could not read that file."; render(); };
+      rd.onload = function(){
+        try {
+          var data = JSON.parse(rd.result);
+          if (!data.config || !data.config.categories) throw new Error("shape");
+          view.pending = {
+            data: data,
+            items: (data.config.items || []).length,
+            cats:  (data.config.categories || []).length,
+            days:  Object.keys(data.days || {}).length
+          };
+          renderSheet();
+        } catch(err){
+          notice = "That does not look like a Day Count backup.";
+          render();
+        }
+      };
+      rd.readAsText(file);
+    });
+  }
   if (s.kind === "item") setTimeout(function(){ document.getElementById("f-name").focus(); },50);
   if (s.kind === "cat"){
     document.getElementById("f-photo").addEventListener("change", function(ev){
@@ -678,6 +739,33 @@ function renderInstall(){
     : "";
 }
 
+/* the most recent earlier day that has a count for this item */
+function carryIn(itemId){
+  var d = view.date;
+  for (var back = 0; back < 30; back++){
+    d = shift(d, -1);
+    var rec = (days[d] || {})[itemId];
+    if (rec && has(rec.inQty)) return { qty: derive(rec).left, date: d };
+  }
+  return null;
+}
+
+function exportBackup(){
+  var blob = new Blob([JSON.stringify({
+    format: "daycount-backup-1",
+    saved: new Date().toISOString(),
+    config: config, days: days, sheets: sheets
+  }, null, 2)], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "daycount-backup-" + todayKey() + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+}
+
 function nextSeq(){
   var e = entriesFor(), top = 0;
   Object.keys(e).forEach(function(k){ top = Math.max(top, Number(e[k].seq) || 0); });
@@ -723,6 +811,19 @@ document.addEventListener("click", function(ev){
       config.categories.push({ id:uid(), name:"New group", image:null }); saveConfig(); break;
     case "count":       view.sheet = {kind:"count", id:id}; break;
     case "out-list":    view.sheet = {kind:"outlist"}; break;
+    case "backup":      view.pending = null; view.sheet = {kind:"backup"}; break;
+    case "cancel-restore": view.pending = null; break;
+    case "do-export":   exportBackup(); return;
+    case "do-restore":
+      if (view.pending){
+        var d = view.pending.data;
+        config = d.config;
+        days   = d.days   || {};
+        sheets = d.sheets || {};
+        saveConfig(); saveDays(); saveSheets();
+        view.pending = null; view.sheet = null; view.cat = null;
+      }
+      break;
     case "edit-item":   view.sheet = {kind:"item", id:id}; break;
     case "new-item":    view.sheet = {kind:"item", id:null}; break;
     case "close": case "close-scrim": view.sheet = null; view.draft = null; break;
