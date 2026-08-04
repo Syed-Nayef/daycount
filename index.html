@@ -79,6 +79,16 @@ h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .sheetrow.tot .v{width:132px;text-align:right;font-family:var(--mono);font-size:22px;
   font-weight:600;color:var(--green)}
 .note{font-size:12px;color:var(--muted);margin:10px 2px 0;line-height:1.5}
+.diffcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  margin-top:12px;padding:14px 16px;display:flex;align-items:center;gap:12px}
+.diffcard .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  font-weight:600}
+.diffcard .sub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px}
+.diffcard .v{margin-left:auto;font-family:var(--mono);font-size:38px;font-weight:700;
+  letter-spacing:-.02em;white-space:nowrap}
+.diffcard .v.up{color:var(--green)}
+.diffcard .v.down{color:var(--clay)}
+.diffcard .v.flat{color:var(--muted)}
 
 .cathead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .cathead .thumb{width:52px;height:52px;aspect-ratio:auto;border-radius:12px;flex:0 0 auto}
@@ -229,12 +239,24 @@ function saveSheets(){
 function entriesFor(){ return days[view.date] || {}; }
 function sheetFor(){ return sheets[view.date] || {}; }
 
+function has(v){ return v !== undefined && v !== null && String(v).trim() !== ""; }
+
 function calc(item){
   var e = entriesFor()[item.id] || {};
   var inQty = Number(e.inQty) || 0;
-  var left  = Number(e.outQty) || 0;
-  var counted = e.inQty !== undefined && e.inQty !== "";
-  var sold = Math.max(0, inQty - left);
+  var counted = has(e.inQty);
+  var left, sold;
+
+  if (has(e.soldQty)){                    /* sold was typed or derived */
+    sold = Math.max(0, Number(e.soldQty) || 0);
+    left = has(e.outQty) ? (Number(e.outQty)||0) : Math.max(0, inQty - sold);
+  } else if (has(e.outQty)){              /* only the closing count is known */
+    left = Number(e.outQty) || 0;
+    sold = Math.max(0, inQty - left);
+  } else {                                /* opening count only - nothing moved yet */
+    left = inQty;
+    sold = 0;
+  }
   return { inQty:inQty, left:left, sold:sold, counted:counted, amount: sold * (Number(item.price)||0) };
 }
 function catTotal(id){
@@ -319,6 +341,7 @@ function render(){
     });
     h += '<div class="sheetrow tot"><label>TOTAL AMOUNTS</label>'+
          '<div class="v" id="r-total">'+money(reportTotal())+"</div></div></div>";
+    h += diffCardHTML();
     h += '<p class="note">Every box is yours to type in. TOTAL AMOUNTS adds all seven '+
          "rows together as you go. Entries save on their own and are kept per day.</p>";
     wrap.innerHTML = h;
@@ -393,6 +416,26 @@ function render(){
   renderInstall();
 }
 
+function diffCardHTML(){
+  var d = grandTotal() - reportTotal();
+  var cls = d > 0.004 ? "up" : (d < -0.004 ? "down" : "flat");
+  var sign = d > 0.004 ? "+" : (d < -0.004 ? "\u2212" : "");
+  return '<div class="diffcard"><div><div class="k">Difference</div>'+
+         '<div class="sub" id="d-sub">'+money(grandTotal())+" \u2212 "+money(reportTotal())+"</div></div>"+
+         '<div class="v '+cls+'" id="d-val">'+sign+money(Math.abs(d))+"</div></div>";
+}
+
+function paintDiff(){
+  var val = document.getElementById("d-val");
+  if (!val) return;
+  var d = grandTotal() - reportTotal();
+  var cls = d > 0.004 ? "up" : (d < -0.004 ? "down" : "flat");
+  var sign = d > 0.004 ? "+" : (d < -0.004 ? "\u2212" : "");
+  val.className = "v " + cls;
+  val.textContent = sign + money(Math.abs(d));
+  document.getElementById("d-sub").textContent = money(grandTotal()) + " \u2212 " + money(reportTotal());
+}
+
 function renderBar(cat){
   var label, value;
   if (!cat && view.tab === "report"){ label = "Total amounts"; value = reportTotal(); }
@@ -413,6 +456,7 @@ function wireReport(){
       sheets[view.date][el.dataset.k] = el.value;
       saveSheets();
       document.getElementById("r-total").textContent = money(reportTotal());
+      paintDiff();
       renderBar(null);
     });
     el.addEventListener("keydown", function(ev){
@@ -446,8 +490,9 @@ function renderSheet(){
   if (s.kind === "count"){
     var item = config.items.filter(function(i){ return i.id===s.id; })[0];
     var e = entriesFor()[item.id] || {};
-    var soldStart = (e.inQty !== undefined && e.inQty !== "")
-      ? Math.max(0,(Number(e.inQty)||0)-(Number(e.outQty)||0)) : "";
+    var c0 = calc(item);
+    var soldStart = has(e.soldQty) ? e.soldQty
+                  : (has(e.outQty) ? c0.sold : "");
     h += "<h2>"+esc(item.name)+"</h2>"+
          '<div class="two">'+
          '<label class="f"><span class="k">In &mdash; opening</span>'+
@@ -537,20 +582,29 @@ function wireCount(itemId){
     document.getElementById("p-amt").textContent  = money(amt);
   }
 
+  /* Out typed -> work out Sold. Blank Out means nothing to derive from. */
   function fromOut(){
-    if (blank(fin) && blank(fout)) { fsold.value = ""; return paint(); }
-    fsold.value = Math.max(0, num(fin) - num(fout));
+    if (blank(fout)) fsold.value = "";
+    else fsold.value = Math.max(0, num(fin) - num(fout));
     paint();
   }
+  /* Sold typed -> work out Out. Blank Sold means nothing to derive from. */
   function fromSold(){
-    if (blank(fin) && blank(fsold)) { fout.value = ""; return paint(); }
-    fout.value = Math.max(0, num(fin) - num(fsold));
+    if (blank(fsold)) fout.value = "";
+    else fout.value = Math.max(0, num(fin) - num(fsold));
+    paint();
+  }
+  /* In typed -> only refresh whichever of the other two already has a number */
+  function fromIn(){
+    if (lock === "sold" && !blank(fsold)) return fromSold();
+    if (!blank(fout))  return fromOut();
+    if (!blank(fsold)) return fromSold();
     paint();
   }
 
   fout.addEventListener("input", function(){ lock = "out";  fromOut(); });
   fsold.addEventListener("input", function(){ lock = "sold"; fromSold(); });
-  fin.addEventListener("input", function(){ lock === "sold" ? fromSold() : fromOut(); });
+  fin.addEventListener("input", fromIn);
 
   paint();
   setTimeout(function(){ fin.focus(); }, 50);
@@ -590,8 +644,9 @@ document.addEventListener("click", function(ev){
     case "save-count":
       var iv = document.getElementById("f-in").value;
       var ov = document.getElementById("f-out").value;
+      var sv = document.getElementById("f-sold").value;
       days[view.date] = days[view.date] || {};
-      days[view.date][id] = { inQty: iv, outQty: ov };
+      days[view.date][id] = { inQty: iv, outQty: ov, soldQty: sv };
       saveDays(); view.sheet = null; break;
 
     case "save-item":
