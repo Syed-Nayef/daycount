@@ -111,6 +111,11 @@ h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .bar{height:5px;border-radius:5px;background:var(--soft);margin-top:11px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--green);transition:width .25s ease}
 .hint{font-size:14px;color:var(--muted);margin-top:6px}
+.card.moved{background:var(--soft);border-color:var(--green);box-shadow:inset 3px 0 0 var(--green)}
+.card.moved .rowtop .price{color:var(--green)}
+.divider{display:flex;align-items:center;gap:10px;margin:16px 2px 8px;
+  font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.divider:after{content:"";flex:1;height:1px;background:var(--line)}
 
 .empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:28px 18px;text-align:center}
 .empty b{display:block;font-size:17px;font-weight:700;margin-bottom:4px}
@@ -241,8 +246,8 @@ function sheetFor(){ return sheets[view.date] || {}; }
 
 function has(v){ return v !== undefined && v !== null && String(v).trim() !== ""; }
 
-function calc(item){
-  var e = entriesFor()[item.id] || {};
+function derive(e){
+  e = e || {};
   var inQty = Number(e.inQty) || 0;
   var counted = has(e.inQty);
   var left, sold;
@@ -257,7 +262,14 @@ function calc(item){
     left = inQty;
     sold = 0;
   }
-  return { inQty:inQty, left:left, sold:sold, counted:counted, amount: sold * (Number(item.price)||0) };
+  return { inQty:inQty, left:left, sold:sold, counted:counted };
+}
+
+function calc(item){
+  var d = derive(entriesFor()[item.id]);
+  d.amount = d.sold * (Number(item.price)||0);
+  d.seq = (entriesFor()[item.id] || {}).seq;
+  return d;
 }
 function catTotal(id){
   return config.items.filter(function(i){ return i.catId===id; })
@@ -373,6 +385,8 @@ function render(){
     h += '<div class="salecard"><div class="k">Total sale</div>'+
          '<input id="totalsale" inputmode="decimal" enterkeyhint="done" '+
          'placeholder="0.00" value="'+esc(sheetFor().totalSale)+'"></div>';
+    h += '<button class="btn wide" style="margin-top:12px" data-a="out-list">'+
+         "View all Out counts</button>";
   }
 
   /* ---- inside a category ---- */
@@ -382,15 +396,29 @@ function render(){
          "<div><b>"+esc(cat.name)+"</b><span>"+money(catTotal(cat.id))+" today</span></div></div>";
 
     var items = config.items.filter(function(i){ return i.catId===cat.id; });
+    items = items.map(function(it, idx){ return { it:it, idx:idx, c:calc(it) }; })
+      .sort(function(a,b){
+        var as = a.c.sold > 0, bs = b.c.sold > 0;
+        if (as !== bs) return as ? -1 : 1;                  /* sold ones rise */
+        if (as && bs) return (a.c.seq || 0) - (b.c.seq || 0); /* earliest entry first */
+        return a.idx - b.idx;                                /* rest keep their order */
+      })
+      .map(function(x){ return x.it; });
     if (!items.length){
       h += '<div class="empty"><b>No items here yet</b><p>Add your first item and set its price.</p>'+
            '<button class="btn solid" data-a="new-item">Add an item</button></div>';
     } else {
       h += '<div class="rows">';
+      var seenUnsold = false;
       items.forEach(function(item){
         var c = calc(item);
         var pct = c.inQty>0 ? Math.min(100, c.sold/c.inQty*100) : 0;
-        h += '<div class="card"><button class="row" data-a="'+(view.editing?"edit-item":"count")+'" data-id="'+item.id+'">'+
+        if (c.sold <= 0 && !seenUnsold){
+          seenUnsold = true;
+          if (items.some(function(x){ return calc(x).sold > 0; }))
+            h += '</div><div class="divider">Not sold yet</div><div class="rows">';
+        }
+        h += '<div class="card'+(c.sold>0?" moved":"")+'"><button class="row" data-a="'+(view.editing?"edit-item":"count")+'" data-id="'+item.id+'">'+
              '<div class="rowtop"><b>'+esc(item.name)+'</b><span class="price">@ '+money(item.price)+"</span></div>";
         if (c.counted){
           h += '<div class="stats">'+
@@ -510,6 +538,31 @@ function renderSheet(){
          '<button class="btn solid" style="flex:2" data-a="save-count" data-id="'+item.id+'">Save count</button></div>';
   }
 
+  if (s.kind === "outlist"){
+    h += "<h2>Out counts &mdash; "+pretty(view.date)+"</h2>";
+    var any = false;
+    config.categories.forEach(function(k){
+      var list = config.items.filter(function(i){ return i.catId===k.id; });
+      if (!list.length) return;
+      any = true;
+      h += '<div class="divider" style="margin-top:14px">'+esc(k.name)+"</div>";
+      h += '<div class="card">';
+      list.forEach(function(it){
+        var c = calc(it);
+        h += '<div class="sheetrow"><label>'+esc(it.name)+"</label>"+
+             '<div style="width:70px;text-align:right;font-family:var(--mono);font-size:19px;'+
+             'font-weight:600;color:'+(c.counted?"var(--ink)":"var(--muted)")+'">'+
+             (c.counted ? c.left : "\u2014")+"</div></div>";
+      });
+      h += "</div>";
+    });
+    if (!any) h += '<p class="note">No items yet.</p>';
+    h += '<p class="note">Out is what is left at close. A dash means that item has not been '+
+         "counted today.</p>"+
+         '<div class="actions"><div class="spacer"></div>'+
+         '<button class="btn solid" data-a="close">Close</button></div>';
+  }
+
   if (s.kind === "item"){
     var it = s.id ? config.items.filter(function(i){ return i.id===s.id; })[0] : null;
     h += "<h2>"+(it?"Edit item":"New item")+"</h2>"+
@@ -625,15 +678,27 @@ function renderInstall(){
     : "";
 }
 
+function nextSeq(){
+  var e = entriesFor(), top = 0;
+  Object.keys(e).forEach(function(k){ top = Math.max(top, Number(e[k].seq) || 0); });
+  return top + 1;
+}
+
 function saveCount(id){
   var fin = document.getElementById("f-in");
   if (!fin) return;
   days[view.date] = days[view.date] || {};
-  days[view.date][id] = {
+  var prev = days[view.date][id] || {};
+  var rec = {
     inQty:   fin.value,
     outQty:  document.getElementById("f-out").value,
     soldQty: document.getElementById("f-sold").value
   };
+  if (derive(rec).sold > 0){
+    /* keep the original stamp so the row doesn't jump when you edit it later */
+    rec.seq = prev.seq || nextSeq();
+  }
+  days[view.date][id] = rec;
   saveDays();
   view.sheet = null;
   render();
@@ -657,6 +722,7 @@ document.addEventListener("click", function(ev){
     case "add-cat":
       config.categories.push({ id:uid(), name:"New group", image:null }); saveConfig(); break;
     case "count":       view.sheet = {kind:"count", id:id}; break;
+    case "out-list":    view.sheet = {kind:"outlist"}; break;
     case "edit-item":   view.sheet = {kind:"item", id:id}; break;
     case "new-item":    view.sheet = {kind:"item", id:null}; break;
     case "close": case "close-scrim": view.sheet = null; view.draft = null; break;
