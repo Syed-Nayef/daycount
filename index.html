@@ -27,7 +27,7 @@ button{font-family:inherit;cursor:pointer}
 
 #wrap{max-width:560px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top)) 14px 108px}
 
-.topbar{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.topbar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .back{background:none;border:none;color:var(--green);font-size:15px;font-weight:600;padding:6px 4px}
 .btn{background:transparent;color:var(--ink);border:1px solid var(--line);
@@ -36,6 +36,12 @@ h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .btn.solid{background:var(--green);color:#fff;border-color:var(--green)}
 .btn.danger{color:var(--clay);border-color:var(--clay)}
 .btn.wide{width:100%}
+
+.tabs{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:4px;gap:4px;margin-bottom:12px}
+.tabs button{flex:1;border:none;background:none;padding:10px 8px;border-radius:9px;
+  font-size:14px;font-weight:600;color:var(--muted)}
+.tabs button.on{background:var(--ink);color:#fff}
 
 .datestrip{display:flex;align-items:center;justify-content:space-between;background:var(--panel);
   border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:14px}
@@ -54,6 +60,25 @@ h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .tile .meta b{font-size:19px;font-weight:700;letter-spacing:-.01em}
 .tile .meta .amt{font-family:var(--mono);font-size:13px;color:var(--green);margin-top:2px}
 .tile .meta .sub{font-size:12px;color:var(--muted)}
+
+.salecard{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:14px 16px;margin-top:12px}
+.salecard .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;margin-bottom:8px}
+.salecard input{width:100%;padding:12px 14px;font-family:var(--mono);font-size:24px;font-weight:600;
+  color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px}
+
+.sheetrow{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.sheetrow:last-child{border-bottom:none}
+.sheetrow label{flex:1;font-size:14px;font-weight:600;letter-spacing:.01em}
+.sheetrow input{width:132px;padding:9px 11px;text-align:right;font-family:var(--mono);
+  font-size:17px;font-weight:600;color:var(--ink);background:var(--paper);
+  border:1px solid var(--line);border-radius:9px}
+.sheetrow.tot{background:var(--soft);border-bottom:none}
+.sheetrow.tot label{font-size:15px;font-weight:700}
+.sheetrow.tot .v{width:132px;text-align:right;font-family:var(--mono);font-size:22px;
+  font-weight:600;color:var(--green)}
+.note{font-size:12px;color:var(--muted);margin:10px 2px 0;line-height:1.5}
 
 .cathead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .cathead .thumb{width:52px;height:52px;aspect-ratio:auto;border-radius:12px;flex:0 0 auto}
@@ -100,11 +125,12 @@ label.f .k{display:block;font-size:11px;letter-spacing:.09em;text-transform:uppe
 label.f input{width:100%;padding:12px 14px;font-size:16px;font-weight:500;color:var(--ink);
   background:var(--paper);border:1px solid var(--line);border-radius:10px;font-family:var(--sans)}
 label.f input.num{font-family:var(--mono);font-size:22px}
+label.f.auto input{background:var(--soft);border-style:dashed}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.soldwrap{margin-top:12px}
 .preview{background:var(--soft);border-radius:12px;padding:14px 16px;margin:16px 0;display:flex;align-items:center}
 .preview .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--green);font-weight:600}
-.preview .sold{font-family:var(--mono);font-size:26px;font-weight:600}
-.preview .calc{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.preview .calc{font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:3px}
 .preview .amt{font-family:var(--mono);font-size:30px;font-weight:600;color:var(--green)}
 .actions{display:flex;gap:10px;margin-top:18px;align-items:center}
 .photo{height:150px;border-radius:12px;background:var(--soft) center/cover no-repeat;
@@ -127,7 +153,7 @@ label.f input.num{font-family:var(--mono);font-size:22px}
 <div id="install"></div>
 
 <script>
-/* ---------------- state ---------------- */
+/* ---------------- defaults ---------------- */
 var DEFAULTS = {
   categories: [
     { id:"ol", name:"OL", image:null },
@@ -136,10 +162,22 @@ var DEFAULTS = {
   items: []
 };
 
-var config, days, notice = "";
-var view = { cat:null, editing:false, date:todayKey(), sheet:null, draft:null };
+/* rows of the shift report, in the order they appear on the paper form */
+var REPORT_ROWS = [
+  { id:"cash",   label:"TOTAL CASH" },
+  { id:"credit", label:"CREDIT CARDS" },
+  { id:"inside", label:"INSIDE CARDS" },
+  { id:"fleet",  label:"FLEET CARDS" },
+  { id:"csale",  label:"CREDIT SALE" },
+  { id:"misc",   label:"MISC. EXP. / PAID OUT" },
+  { id:"change", label:"CHANGE" }
+];
+
+var config, days, sheets, notice = "";
+var view = { tab:"counts", cat:null, editing:false, date:todayKey(), sheet:null, draft:null };
 var deferredInstall = null;
 
+/* ---------------- dates ---------------- */
 function todayKey(){ return keyOf(new Date()); }
 function keyOf(d){
   var p = function(n){ return String(n).padStart(2,"0"); };
@@ -160,7 +198,7 @@ function money(n){
 }
 function uid(){ return Math.random().toString(36).slice(2,10); }
 function esc(s){
-  return String(s).replace(/[&<>"']/g, function(c){
+  return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
   });
 }
@@ -171,6 +209,8 @@ function load(){
   catch(e){ config = DEFAULTS; }
   try { days = JSON.parse(localStorage.getItem("daycount:days")) || {}; }
   catch(e){ days = {}; }
+  try { sheets = JSON.parse(localStorage.getItem("daycount:sheets")) || {}; }
+  catch(e){ sheets = {}; }
 }
 function saveConfig(){
   try { localStorage.setItem("daycount:config", JSON.stringify(config)); notice=""; }
@@ -180,9 +220,15 @@ function saveDays(){
   try { localStorage.setItem("daycount:days", JSON.stringify(days)); notice=""; }
   catch(e){ notice = "Couldn't save that count. Storage is full."; }
 }
+function saveSheets(){
+  try { localStorage.setItem("daycount:sheets", JSON.stringify(sheets)); notice=""; }
+  catch(e){ notice = "Couldn't save that entry. Storage is full."; }
+}
 
-/* ---------------- math ---------------- */
+/* ---------------- maths ---------------- */
 function entriesFor(){ return days[view.date] || {}; }
+function sheetFor(){ return sheets[view.date] || {}; }
+
 function calc(item){
   var e = entriesFor()[item.id] || {};
   var inQty = Number(e.inQty) || 0;
@@ -197,6 +243,10 @@ function catTotal(id){
 }
 function grandTotal(){
   return config.items.reduce(function(s,i){ return s + calc(i).amount; }, 0);
+}
+function reportTotal(){
+  var s = sheetFor();
+  return REPORT_ROWS.reduce(function(sum,r){ return sum + (Number(s[r.id]) || 0); }, 0);
 }
 
 /* ---------------- image ---------------- */
@@ -226,14 +276,29 @@ function render(){
   var cat = config.categories.filter(function(k){ return k.id===view.cat; })[0] || null;
   var h = "";
 
+  /* header */
   h += '<div class="topbar">';
   h += cat
     ? '<button class="back" data-a="home">&#8592; All groups</button>'
     : "<h1>Day Count</h1>";
   h += '<div class="spacer"></div>';
-  h += '<button class="btn sm'+(view.editing?" solid":"")+'" data-a="toggle-edit">'+
-       (view.editing?"Done":"Edit")+"</button></div>";
+  if (!cat && view.tab === "counts")
+    h += '<button class="btn sm'+(view.editing?" solid":"")+'" data-a="toggle-edit">'+
+         (view.editing?"Done":"Edit")+"</button>";
+  if (cat)
+    h += '<button class="btn sm'+(view.editing?" solid":"")+'" data-a="toggle-edit">'+
+         (view.editing?"Done":"Edit")+"</button>";
+  h += "</div>";
 
+  /* tabs, home only */
+  if (!cat){
+    h += '<div class="tabs">'+
+         '<button class="'+(view.tab==="counts"?"on":"")+'" data-a="tab" data-id="counts">Counts</button>'+
+         '<button class="'+(view.tab==="report"?"on":"")+'" data-a="tab" data-id="report">Shift report</button>'+
+         "</div>";
+  }
+
+  /* date strip */
   var isToday = view.date >= todayKey();
   h += '<div class="datestrip">'+
        '<button class="arrow" data-a="prev">&#8249;</button>'+
@@ -242,6 +307,28 @@ function render(){
 
   if (notice) h += '<div class="notice">'+esc(notice)+"</div>";
 
+  /* ---- shift report tab ---- */
+  if (!cat && view.tab === "report"){
+    var s = sheetFor();
+    h += '<div class="card">';
+    REPORT_ROWS.forEach(function(r){
+      h += '<div class="sheetrow"><label for="r-'+r.id+'">'+r.label+"</label>"+
+           '<input id="r-'+r.id+'" class="rin" data-k="'+r.id+'" inputmode="decimal" '+
+           'placeholder="0.00" value="'+esc(s[r.id])+'"></div>';
+    });
+    h += '<div class="sheetrow tot"><label>TOTAL AMOUNTS</label>'+
+         '<div class="v" id="r-total">'+money(reportTotal())+"</div></div></div>";
+    h += '<p class="note">Every box is yours to type in. TOTAL AMOUNTS adds all seven '+
+         "rows together as you go. Entries save on their own and are kept per day.</p>";
+    wrap.innerHTML = h;
+    wireReport();
+    renderBar(null);
+    renderSheet();
+    renderInstall();
+    return;
+  }
+
+  /* ---- counts tab, home ---- */
   if (!cat){
     h += '<div class="grid">';
     config.categories.forEach(function(k){
@@ -258,7 +345,14 @@ function render(){
     });
     h += "</div>";
     if (view.editing) h += '<button class="btn wide" style="margin-top:12px" data-a="add-cat">+ Add a group</button>';
-  } else {
+
+    h += '<div class="salecard"><div class="k">Total sale</div>'+
+         '<input id="totalsale" inputmode="decimal" placeholder="0.00" value="'+
+         esc(sheetFor().totalSale)+'"></div>';
+  }
+
+  /* ---- inside a category ---- */
+  if (cat){
     h += '<div class="cathead"><div class="thumb"'+thumbStyle(cat.image)+">"+
          (cat.image?"":"<i>"+esc(cat.name.slice(0,2).toUpperCase())+"</i>")+"</div>"+
          "<div><b>"+esc(cat.name)+"</b><span>"+money(catTotal(cat.id))+" today</span></div></div>";
@@ -292,17 +386,48 @@ function render(){
   }
 
   wrap.innerHTML = h;
-
-  document.getElementById("bar").innerHTML =
-    '<div class="totalbar"><div class="in"><div>'+
-    '<div class="k">'+(cat?esc(cat.name)+" total":"Day total")+"</div>"+
-    '<div class="d">'+pretty(view.date)+"</div></div>"+
-    '<div class="spacer"></div><div class="v">'+money(cat?catTotal(cat.id):grandTotal())+"</div></div></div>";
-
+  if (!cat) wireTotalSale();
+  renderBar(cat);
   renderSheet();
   renderInstall();
 }
 
+function renderBar(cat){
+  var label, value;
+  if (!cat && view.tab === "report"){ label = "Total amounts"; value = reportTotal(); }
+  else if (cat){ label = cat.name + " total"; value = catTotal(cat.id); }
+  else { label = "Day total"; value = grandTotal(); }
+  document.getElementById("bar").innerHTML =
+    '<div class="totalbar"><div class="in"><div>'+
+    '<div class="k">'+esc(label)+"</div>"+
+    '<div class="d">'+pretty(view.date)+"</div></div>"+
+    '<div class="spacer"></div><div class="v">'+money(value)+"</div></div></div>";
+}
+
+/* live-saving fields on the report tab */
+function wireReport(){
+  Array.prototype.forEach.call(document.querySelectorAll(".rin"), function(el){
+    el.addEventListener("input", function(){
+      sheets[view.date] = sheets[view.date] || {};
+      sheets[view.date][el.dataset.k] = el.value;
+      saveSheets();
+      document.getElementById("r-total").textContent = money(reportTotal());
+      renderBar(null);
+    });
+  });
+}
+
+function wireTotalSale(){
+  var el = document.getElementById("totalsale");
+  if (!el) return;
+  el.addEventListener("input", function(){
+    sheets[view.date] = sheets[view.date] || {};
+    sheets[view.date].totalSale = el.value;
+    saveSheets();
+  });
+}
+
+/* ---------------- sheets ---------------- */
 function renderSheet(){
   var m = document.getElementById("modal");
   var s = view.sheet;
@@ -312,15 +437,19 @@ function renderSheet(){
   if (s.kind === "count"){
     var item = config.items.filter(function(i){ return i.id===s.id; })[0];
     var e = entriesFor()[item.id] || {};
+    var soldStart = (e.inQty !== undefined && e.inQty !== "")
+      ? Math.max(0,(Number(e.inQty)||0)-(Number(e.outQty)||0)) : "";
     h += "<h2>"+esc(item.name)+"</h2>"+
          '<div class="two">'+
-         '<label class="f"><span class="k">In &mdash; opening count</span>'+
-         '<input id="f-in" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.inQty!==undefined?e.inQty:"")+'"></label>'+
-         '<label class="f"><span class="k">Out &mdash; left at close</span>'+
-         '<input id="f-out" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.outQty!==undefined?e.outQty:"")+'"></label>'+
+         '<label class="f"><span class="k">In &mdash; opening</span>'+
+         '<input id="f-in" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.inQty)+'"></label>'+
+         '<label class="f" id="w-out"><span class="k">Out &mdash; left</span>'+
+         '<input id="f-out" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.outQty)+'"></label>'+
          "</div>"+
-         '<div class="preview"><div><div class="k">Sold</div>'+
-         '<div class="sold" id="p-sold">0</div><div class="calc" id="p-calc"></div></div>'+
+         '<div class="soldwrap"><label class="f" id="w-sold"><span class="k">Sold</span>'+
+         '<input id="f-sold" class="num" inputmode="decimal" placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
+         '<div class="preview"><div><div class="k">Amount</div>'+
+         '<div class="calc" id="p-calc"></div></div>'+
          '<div class="spacer"></div><div class="amt" id="p-amt">0.00</div></div>'+
          '<div class="actions"><button class="btn" style="flex:1" data-a="close">Cancel</button>'+
          '<button class="btn solid" style="flex:2" data-a="save-count" data-id="'+item.id+'">Save count</button></div>';
@@ -361,18 +490,7 @@ function renderSheet(){
 
   m.innerHTML = h + "</div></div>";
 
-  if (s.kind === "count"){
-    var fin = document.getElementById("f-in"), fout = document.getElementById("f-out");
-    var itm = config.items.filter(function(i){ return i.id===s.id; })[0];
-    var upd = function(){
-      var sold = Math.max(0,(Number(fin.value)||0)-(Number(fout.value)||0));
-      document.getElementById("p-sold").textContent = sold;
-      document.getElementById("p-calc").textContent = sold+" \u00d7 "+money(itm.price);
-      document.getElementById("p-amt").textContent = money(sold*(Number(itm.price)||0));
-    };
-    fin.addEventListener("input",upd); fout.addEventListener("input",upd); upd();
-    setTimeout(function(){ fin.focus(); },50);
-  }
+  if (s.kind === "count") wireCount(s.id);
   if (s.kind === "item") setTimeout(function(){ document.getElementById("f-name").focus(); },50);
   if (s.kind === "cat"){
     document.getElementById("f-photo").addEventListener("change", function(ev){
@@ -386,6 +504,47 @@ function renderSheet(){
       }, function(msg){ notice = msg; render(); });
     });
   }
+}
+
+/* In / Out / Sold stay in step: fill any two, the third works itself out */
+function wireCount(itemId){
+  var item = config.items.filter(function(i){ return i.id===itemId; })[0];
+  var fin  = document.getElementById("f-in");
+  var fout = document.getElementById("f-out");
+  var fsold= document.getElementById("f-sold");
+  var wout = document.getElementById("w-out");
+  var wsold= document.getElementById("w-sold");
+  var lock = "out";            /* which box the user typed in last */
+
+  function num(el){ return Number(el.value) || 0; }
+  function blank(el){ return el.value.trim() === ""; }
+
+  function paint(){
+    wout.className  = "f" + (lock === "sold" ? " auto" : "");
+    wsold.className = "f" + (lock === "out"  ? " auto" : "");
+    var sold = Math.max(0, num(fsold));
+    var amt  = sold * (Number(item.price)||0);
+    document.getElementById("p-calc").textContent = sold + " \u00d7 " + money(item.price);
+    document.getElementById("p-amt").textContent  = money(amt);
+  }
+
+  function fromOut(){
+    if (blank(fin) && blank(fout)) { fsold.value = ""; return paint(); }
+    fsold.value = Math.max(0, num(fin) - num(fout));
+    paint();
+  }
+  function fromSold(){
+    if (blank(fin) && blank(fsold)) { fout.value = ""; return paint(); }
+    fout.value = Math.max(0, num(fin) - num(fsold));
+    paint();
+  }
+
+  fout.addEventListener("input", function(){ lock = "out";  fromOut(); });
+  fsold.addEventListener("input", function(){ lock = "sold"; fromSold(); });
+  fin.addEventListener("input", function(){ lock === "sold" ? fromSold() : fromOut(); });
+
+  paint();
+  setTimeout(function(){ fin.focus(); }, 50);
 }
 
 function renderInstall(){
@@ -402,10 +561,10 @@ document.addEventListener("click", function(ev){
   var t = ev.target.closest("[data-a]");
   if (!t) return;
   var a = t.dataset.a, id = t.dataset.id;
-
   if (a === "close-scrim" && ev.target !== t) return;
 
   switch(a){
+    case "tab":         view.tab = id; view.editing = false; break;
     case "home":        view.cat = null; view.editing = false; break;
     case "toggle-edit": view.editing = !view.editing; break;
     case "prev":        view.date = shift(view.date,-1); break;
@@ -475,7 +634,6 @@ window.addEventListener("beforeinstallprompt", function(e){
 });
 window.addEventListener("appinstalled", function(){ deferredInstall = null; renderInstall(); });
 
-/* roll the date over if the app sits open past midnight */
 document.addEventListener("visibilitychange", function(){
   if (!document.hidden && view.date < todayKey() && !view.sheet){ view.date = todayKey(); render(); }
 });
