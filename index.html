@@ -142,6 +142,22 @@ label.f input{width:100%;padding:12px 14px;font-size:16px;font-weight:500;color:
 label.f input.num{font-family:var(--mono);font-size:22px}
 label.f.auto input{background:var(--soft);border-style:dashed}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.calcrow{padding:11px 14px;border-bottom:1px solid var(--line)}
+.calcrow .head{display:flex;align-items:center;gap:12px}
+.calcrow .head label{flex:1;font-size:14px;font-weight:600}
+.calcrow input{width:170px;padding:9px 11px;text-align:right;font-family:var(--mono);
+  font-size:17px;font-weight:600;color:var(--ink);background:var(--paper);
+  border:1px solid var(--line);border-radius:9px}
+.ops{display:flex;gap:6px;margin-top:9px}
+.ops button{flex:1;padding:9px 0;border:1px solid var(--line);background:var(--paper);
+  border-radius:9px;font-family:var(--mono);font-size:17px;font-weight:600;color:var(--ink)}
+.ops button.clr{color:var(--clay);border-color:var(--clay)}
+.eq{font-family:var(--mono);font-size:13px;color:var(--green);font-weight:600;
+  text-align:right;margin-top:7px;min-height:16px}
+.salecard .lbl{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.salecard .lbl .k{margin:0;flex:1}
+.salecard .lbl input.nm{flex:1;padding:7px 10px;font-size:14px;font-weight:600;
+  background:var(--paper);border:1px solid var(--line);border-radius:8px}
 .pick{display:flex;gap:8px;margin-top:6px}
 .pick button{flex:1;padding:11px 8px;border:1px solid var(--line);background:var(--paper);
   border-radius:10px;font-size:15px;font-weight:600;color:var(--muted)}
@@ -281,11 +297,54 @@ function catTotal(id){
 }
 function grandTotal(){
   var items = config.items.reduce(function(s,i){ return s + calc(i).amount; }, 0);
-  return items + (Number(sheetFor().totalSale) || 0);
+  return items + (Number(sheetFor().totalSale) || 0) + extrasTotal();
 }
+/* works out things like 500+200-50 or 12*4 without using eval */
+function evalExpr(raw){
+  var s = String(raw === undefined || raw === null ? "" : raw)
+            .replace(/[\u00d7x]/gi, "*").replace(/[\u00f7]/g, "/")
+            .replace(/[\u2212\u2013]/g, "-").replace(/\s+/g, "");
+  if (!s) return 0;
+  s = s.replace(/[+\-*\/.]+$/, "");                 /* ignore a dangling operator */
+  if (!s || !/^-?[0-9.]+([+\-*\/][0-9.]+)*$/.test(s)) return Number(s) || 0;
+
+  var nums = [], ops = [], buf = "", i = 0;
+  if (s[0] === "-"){ buf = "-"; i = 1; }
+  for (; i < s.length; i++){
+    var ch = s[i];
+    if ("+-*/".indexOf(ch) > -1){ nums.push(Number(buf) || 0); ops.push(ch); buf = ""; }
+    else buf += ch;
+  }
+  nums.push(Number(buf) || 0);
+
+  for (var j = 0; j < ops.length; ){          /* multiply and divide first */
+    if (ops[j] === "*" || ops[j] === "/"){
+      var r = ops[j] === "*" ? nums[j] * nums[j+1]
+                             : (nums[j+1] === 0 ? 0 : nums[j] / nums[j+1]);
+      nums.splice(j, 2, r); ops.splice(j, 1);
+    } else j++;
+  }
+  var out = nums[0];
+  for (var k = 0; k < ops.length; k++)
+    out = ops[k] === "+" ? out + nums[k+1] : out - nums[k+1];
+  return out;
+}
+
+function isExpr(v){ return /[+\-*\/\u00d7\u00f7]/.test(String(v || "").slice(1)); }
+
 function reportTotal(){
   var s = sheetFor();
-  return REPORT_ROWS.reduce(function(sum,r){ return sum + (Number(s[r.id]) || 0); }, 0);
+  return REPORT_ROWS.reduce(function(sum,r){
+    return sum + (r.id === "cash" ? evalExpr(s.cash) : (Number(s[r.id]) || 0));
+  }, 0);
+}
+
+/* the manual boxes on the Counts tab: Total sale plus any you add */
+function extrasTotal(){
+  var s = sheetFor();
+  return (config.extras || []).reduce(function(sum,x){
+    return sum + (Number(s["x_" + x.id]) || 0);
+  }, 0);
 }
 
 /* ---------------- image ---------------- */
@@ -351,9 +410,22 @@ function render(){
     var s = sheetFor();
     h += '<div class="card">';
     REPORT_ROWS.forEach(function(r){
+      if (r.id === "cash"){
+        h += '<div class="calcrow"><div class="head"><label for="r-cash">'+r.label+"</label>"+
+             '<input id="r-cash" class="rin" data-k="cash" inputmode="text" '+
+             'enterkeyhint="next" placeholder="0.00" value="'+esc(s.cash)+'"></div>'+
+             '<div class="ops">'+
+             '<button data-a="cash-op" data-id="+">+</button>'+
+             '<button data-a="cash-op" data-id="-">\u2212</button>'+
+             '<button data-a="cash-op" data-id="*">\u00d7</button>'+
+             '<button data-a="cash-op" data-id="/">\u00f7</button>'+
+             '<button class="clr" data-a="cash-op" data-id="C">C</button></div>'+
+             '<div class="eq" id="cash-eq"></div></div>';
+        return;
+      }
       h += '<div class="sheetrow"><label for="r-'+r.id+'">'+r.label+"</label>"+
            '<input id="r-'+r.id+'" class="rin" data-k="'+r.id+'" inputmode="decimal" '+
-           'enterkeyhint="done" placeholder="0.00" value="'+esc(s[r.id])+'"></div>';
+           'enterkeyhint="next" placeholder="0.00" value="'+esc(s[r.id])+'"></div>';
     });
     h += '<div class="sheetrow tot"><label>TOTAL AMOUNTS</label>'+
          '<div class="v" id="r-total">'+money(reportTotal())+"</div></div></div>";
@@ -389,6 +461,24 @@ function render(){
     h += '<div class="salecard"><div class="k">Total sale</div>'+
          '<input id="totalsale" inputmode="decimal" enterkeyhint="done" '+
          'placeholder="0.00" value="'+esc(sheetFor().totalSale)+'"></div>';
+
+    (config.extras || []).forEach(function(x){
+      h += '<div class="salecard"><div class="lbl">';
+      if (view.editing){
+        h += '<input class="nm xname" data-id="'+x.id+'" value="'+esc(x.name)+'" '+
+             'placeholder="Box name">'+
+             '<button class="btn sm danger" data-a="del-extra" data-id="'+x.id+'">Remove</button>';
+      } else {
+        h += '<div class="k">'+esc(x.name)+"</div>";
+      }
+      h += "</div>"+
+           '<input class="xval" data-id="'+x.id+'" inputmode="decimal" enterkeyhint="done" '+
+           'placeholder="0.00" value="'+esc(sheetFor()["x_"+x.id])+'"></div>';
+    });
+
+    if (view.editing)
+      h += '<button class="btn wide" style="margin-top:8px" data-a="add-extra">'+
+           "+ Add an entry box</button>";
     h += '<button class="btn wide" style="margin-top:12px" data-a="out-list">'+
          "View all Out counts</button>";
     h += '<button class="btn wide" style="margin-top:8px" data-a="backup">'+
@@ -482,23 +572,60 @@ function renderBar(cat){
 }
 
 /* live-saving fields on the report tab */
+function paintCashEq(){
+  var el = document.getElementById("cash-eq");
+  if (!el) return;
+  var raw = (document.getElementById("r-cash") || {}).value || "";
+  el.textContent = isExpr(raw) ? "= " + money(evalExpr(raw)) : "";
+}
+
 function wireReport(){
-  Array.prototype.forEach.call(document.querySelectorAll(".rin"), function(el){
+  var boxes = Array.prototype.slice.call(document.querySelectorAll(".rin"));
+  boxes.forEach(function(el, idx){
     el.addEventListener("input", function(){
       sheets[view.date] = sheets[view.date] || {};
       sheets[view.date][el.dataset.k] = el.value;
       saveSheets();
       document.getElementById("r-total").textContent = money(reportTotal());
+      paintCashEq();
       paintDiff();
+      renderBar(null);
+    });
+    /* Enter drops you into the next row instead of shutting the keyboard */
+    el.addEventListener("keydown", function(ev){
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      var next = boxes[idx + 1];
+      if (next) next.focus(); else el.blur();
+    });
+  });
+  paintCashEq();
+}
+
+function wireExtras(){
+  Array.prototype.forEach.call(document.querySelectorAll(".xval"), function(el){
+    el.addEventListener("input", function(){
+      sheets[view.date] = sheets[view.date] || {};
+      sheets[view.date]["x_" + el.dataset.id] = el.value;
+      saveSheets();
       renderBar(null);
     });
     el.addEventListener("keydown", function(ev){
       if (ev.key === "Enter"){ ev.preventDefault(); el.blur(); }
     });
   });
+  Array.prototype.forEach.call(document.querySelectorAll(".xname"), function(el){
+    el.addEventListener("input", function(){
+      config.extras = (config.extras || []).map(function(x){
+        return x.id === el.dataset.id ? { id:x.id, name:el.value } : x;
+      });
+      saveConfig();
+    });
+  });
 }
 
 function wireTotalSale(){
+  wireExtras();
   var el = document.getElementById("totalsale");
   if (!el) return;
   el.addEventListener("input", function(){
@@ -539,7 +666,7 @@ function renderSheet(){
          '<input id="f-out" class="num" inputmode="decimal" placeholder="0" value="'+esc(e.outQty)+'"></label>'+
          "</div>"+
          '<div class="soldwrap"><label class="f" id="w-sold"><span class="k">Sold</span>'+
-         '<input id="f-sold" class="num" inputmode="decimal" enterkeyhint="done" '+
+         '<input id="f-sold" class="num" inputmode="decimal" enterkeyhint="next" '+
          'placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
          (carried ? '<p class="note" style="margin-top:8px">Opening count carried over from '+
             pretty(carried.date)+"'s closing figure. Change it if the shelf says otherwise.</p>" : "")+
@@ -732,9 +859,20 @@ function wireCount(itemId){
   fsold.addEventListener("input", function(){ lock = "sold"; fromSold(); });
   fin.addEventListener("input", fromIn);
 
-  /* Sold is the last box, so its go arrow saves and shuts the sheet */
+  /* the go arrow saves and jumps straight to the next item in the group */
+  function advance(){
+    var list = config.items.filter(function(i){ return i.catId === item.catId; });
+    var at = -1;
+    list.forEach(function(x, n){ if (x.id === itemId) at = n; });
+    var next = at > -1 ? list[at + 1] : null;
+    saveCount(itemId);
+    if (next){ view.sheet = { kind:"count", id: next.id }; renderSheet(); }
+  }
   fsold.addEventListener("keydown", function(ev){
-    if (ev.key === "Enter"){ ev.preventDefault(); fsold.blur(); saveCount(itemId); }
+    if (ev.key === "Enter"){ ev.preventDefault(); advance(); }
+  });
+  fout.addEventListener("keydown", function(ev){
+    if (ev.key === "Enter" && startField(item.catId) === "out"){ ev.preventDefault(); advance(); }
   });
 
   paint();
@@ -829,6 +967,13 @@ document.addEventListener("click", function(ev){
     case "edit-cat":    view.draft = null; view.sheet = {kind:"cat", id:id}; break;
     case "add-cat":
       config.categories.push({ id:uid(), name:"New group", image:null }); saveConfig(); break;
+    case "add-extra":
+      config.extras = config.extras || [];
+      config.extras.push({ id:uid(), name:"New box" });
+      saveConfig(); break;
+    case "del-extra":
+      config.extras = (config.extras || []).filter(function(x){ return x.id !== id; });
+      saveConfig(); break;
     case "count":       view.sheet = {kind:"count", id:id}; break;
     case "out-list":    view.sheet = {kind:"outlist"}; break;
     case "backup":      view.pending = null; view.sheet = {kind:"backup"}; break;
@@ -871,6 +1016,24 @@ document.addEventListener("click", function(ev){
       view.draft.focusField = id;
       view.draft.name = document.getElementById("f-catname").value;
       renderSheet(); return;
+
+    case "cash-op":
+      var cb = document.getElementById("r-cash");
+      if (cb){
+        if (id === "C") cb.value = "";
+        else {
+          var v = cb.value.replace(/[+\-*\/]$/, "");   /* swap a trailing operator */
+          cb.value = v === "" ? "" : v + id;
+        }
+        sheets[view.date] = sheets[view.date] || {};
+        sheets[view.date].cash = cb.value;
+        saveSheets();
+        document.getElementById("r-total").textContent = money(reportTotal());
+        paintCashEq(); paintDiff(); renderBar(null);
+        cb.focus();
+        try { var n = cb.value.length; cb.setSelectionRange(n, n); } catch(e){}
+      }
+      return;
 
     case "clear-photo":
       view.draft = view.draft || {};
