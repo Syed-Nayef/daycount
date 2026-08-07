@@ -412,7 +412,7 @@ function render(){
     REPORT_ROWS.forEach(function(r){
       if (r.id === "cash"){
         h += '<div class="calcrow"><div class="head"><label for="r-cash">'+r.label+"</label>"+
-             '<input id="r-cash" class="rin" data-k="cash" inputmode="text" '+
+             '<input id="r-cash" class="rin" data-k="cash" inputmode="decimal" '+
              'enterkeyhint="next" placeholder="0.00" value="'+esc(s.cash)+'"></div>'+
              '<div class="ops">'+
              '<button data-a="cash-op" data-id="+">+</button>'+
@@ -1069,11 +1069,18 @@ document.addEventListener("click", function(ev){
   render();
 });
 
-/* tapping a box selects what's there, so the first digit typed replaces it */
+/* tapping a box selects what's there, so the first digit typed replaces it.
+   the cash box is the exception - it builds up an expression, so the caret
+   just goes to the end and nothing is wiped out. */
 document.addEventListener("focusin", function(ev){
   var el = ev.target;
   if (!el || el.tagName !== "INPUT" || el.type === "file") return;
-  setTimeout(function(){ try { el.select(); } catch(e){} }, 0);
+  setTimeout(function(){
+    try {
+      if (el.id === "r-cash"){ var n = el.value.length; el.setSelectionRange(n, n); }
+      else el.select();
+    } catch(e){}
+  }, 0);
 });
 
 window.addEventListener("beforeinstallprompt", function(e){
