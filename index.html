@@ -682,7 +682,7 @@ function renderSheet(){
          'placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
          '<div class="soldwrap"><label class="f"><span class="k">Additional stock &mdash; optional</span>'+
          '<input id="f-add" class="num" inputmode="decimal" tabindex="-1" '+
-         'placeholder="0" value="'+esc(e.addQty)+'"></label></div>'+
+         'enterkeyhint="next" placeholder="0" value="'+esc(e.addQty)+'"></label></div>'+
          (carried ? '<p class="note" style="margin-top:8px">Opening count carried over from '+
             pretty(carried.date)+"'s closing figure. Change it if the shelf says otherwise.</p>" : "")+
          '<div class="preview"><div><div class="k">Amount</div>'+
@@ -892,6 +892,10 @@ function wireCount(itemId){
   });
   fout.addEventListener("keydown", function(ev){
     if (ev.key === "Enter" && startField(item.catId) === "out"){ ev.preventDefault(); advance(); }
+  });
+  /* the go arrow works here too, even though tabbing skips this box */
+  fadd.addEventListener("keydown", function(ev){
+    if (ev.key === "Enter"){ ev.preventDefault(); advance(); }
   });
 
   paint();
