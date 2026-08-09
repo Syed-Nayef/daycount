@@ -269,20 +269,22 @@ function has(v){ return v !== undefined && v !== null && String(v).trim() !== ""
 function derive(e){
   e = e || {};
   var inQty = Number(e.inQty) || 0;
+  var addQty = Number(e.addQty) || 0;
+  var avail = inQty + addQty;              /* opening stock plus anything put out today */
   var counted = has(e.inQty);
   var left, sold;
 
-  if (has(e.soldQty)){                    /* sold was typed or derived */
+  if (has(e.soldQty)){                     /* sold was typed or derived */
     sold = Math.max(0, Number(e.soldQty) || 0);
-    left = has(e.outQty) ? (Number(e.outQty)||0) : Math.max(0, inQty - sold);
-  } else if (has(e.outQty)){              /* only the closing count is known */
+    left = has(e.outQty) ? (Number(e.outQty)||0) : Math.max(0, avail - sold);
+  } else if (has(e.outQty)){               /* only the closing count is known */
     left = Number(e.outQty) || 0;
-    sold = Math.max(0, inQty - left);
-  } else {                                /* opening count only - nothing moved yet */
-    left = inQty;
+    sold = Math.max(0, avail - left);
+  } else {                                 /* opening count only - nothing moved yet */
+    left = avail;
     sold = 0;
   }
-  return { inQty:inQty, left:left, sold:sold, counted:counted };
+  return { inQty:inQty, addQty:addQty, avail:avail, left:left, sold:sold, counted:counted };
 }
 
 function calc(item){
@@ -507,7 +509,7 @@ function render(){
       var seenUnsold = false;
       items.forEach(function(item){
         var c = calc(item);
-        var pct = c.inQty>0 ? Math.min(100, c.sold/c.inQty*100) : 0;
+        var pct = c.avail>0 ? Math.min(100, c.sold/c.avail*100) : 0;
         if (c.sold <= 0 && !seenUnsold){
           seenUnsold = true;
           if (items.some(function(x){ return calc(x).sold > 0; }))
@@ -517,7 +519,9 @@ function render(){
              '<div class="rowtop"><b>'+esc(item.name)+'</b><span class="price">@ '+money(item.price)+"</span></div>";
         if (c.counted){
           h += '<div class="stats">'+
-               '<div class="stat"><div class="k">In</div><div class="v">'+c.inQty+"</div></div>"+
+               '<div class="stat"><div class="k">In</div><div class="v">'+c.inQty+
+                 (c.addQty>0?' <span style="color:var(--green);font-size:13px">+'+c.addQty+"</span>":"")+
+                 "</div></div>"+
                '<div class="stat left"><div class="k">Left</div><div class="v">'+c.left+"</div></div>"+
                '<div class="stat big"><div class="k">Sold</div><div class="v">'+c.sold+"</div></div>"+
                '<div class="spacer"></div><div class="rowamt">'+money(c.amount)+"</div></div>"+
@@ -539,24 +543,32 @@ function render(){
   renderInstall();
 }
 
+/* counts = what the shelves say you should have taken.
+   report = what actually came in. Short is red, over is green. */
 function diffCardHTML(){
-  var d = grandTotal() - reportTotal();
+  var d = reportTotal() - grandTotal();
   var cls = d > 0.004 ? "up" : (d < -0.004 ? "down" : "flat");
   var sign = d > 0.004 ? "+" : (d < -0.004 ? "\u2212" : "");
-  return '<div class="diffcard"><div><div class="k">Difference</div>'+
-         '<div class="sub" id="d-sub">'+money(grandTotal())+" \u2212 "+money(reportTotal())+"</div></div>"+
+  return '<div class="diffcard"><div><div class="k">Shift report \u2212 counts</div>'+
+         '<div class="sub" id="d-sub">'+diffSub()+"</div></div>"+
          '<div class="v '+cls+'" id="d-val">'+sign+money(Math.abs(d))+"</div></div>";
+}
+
+function diffSub(){
+  var d = reportTotal() - grandTotal();
+  var word = d > 0.004 ? "over" : (d < -0.004 ? "short" : "level");
+  return money(reportTotal()) + " \u2212 " + money(grandTotal()) + "  \u00b7  " + word;
 }
 
 function paintDiff(){
   var val = document.getElementById("d-val");
   if (!val) return;
-  var d = grandTotal() - reportTotal();
+  var d = reportTotal() - grandTotal();
   var cls = d > 0.004 ? "up" : (d < -0.004 ? "down" : "flat");
   var sign = d > 0.004 ? "+" : (d < -0.004 ? "\u2212" : "");
   val.className = "v " + cls;
   val.textContent = sign + money(Math.abs(d));
-  document.getElementById("d-sub").textContent = money(grandTotal()) + " \u2212 " + money(reportTotal());
+  document.getElementById("d-sub").textContent = diffSub();
 }
 
 function renderBar(cat){
@@ -668,6 +680,9 @@ function renderSheet(){
          '<div class="soldwrap"><label class="f" id="w-sold"><span class="k">Sold</span>'+
          '<input id="f-sold" class="num" inputmode="decimal" enterkeyhint="next" '+
          'placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
+         '<div class="soldwrap"><label class="f"><span class="k">Additional stock &mdash; optional</span>'+
+         '<input id="f-add" class="num" inputmode="decimal" tabindex="-1" '+
+         'placeholder="0" value="'+esc(e.addQty)+'"></label></div>'+
          (carried ? '<p class="note" style="margin-top:8px">Opening count carried over from '+
             pretty(carried.date)+"'s closing figure. Change it if the shelf says otherwise.</p>" : "")+
          '<div class="preview"><div><div class="k">Amount</div>'+
@@ -819,32 +834,35 @@ function wireCount(itemId){
   var fin  = document.getElementById("f-in");
   var fout = document.getElementById("f-out");
   var fsold= document.getElementById("f-sold");
+  var fadd = document.getElementById("f-add");
   var wout = document.getElementById("w-out");
   var wsold= document.getElementById("w-sold");
   var lock = "out";            /* which box the user typed in last */
 
   function num(el){ return Number(el.value) || 0; }
   function blank(el){ return el.value.trim() === ""; }
+  function avail(){ return num(fin) + num(fadd); }
 
   function paint(){
     wout.className  = "f" + (lock === "sold" ? " auto" : "");
     wsold.className = "f" + (lock === "out"  ? " auto" : "");
     var sold = Math.max(0, num(fsold));
     var amt  = sold * (Number(item.price)||0);
-    document.getElementById("p-calc").textContent = sold + " \u00d7 " + money(item.price);
+    document.getElementById("p-calc").textContent = sold + " \u00d7 " + money(item.price) +
+      (num(fadd) > 0 ? "   (" + num(fin) + " + " + num(fadd) + " out)" : "");
     document.getElementById("p-amt").textContent  = money(amt);
   }
 
   /* Out typed -> work out Sold. Blank Out means nothing to derive from. */
   function fromOut(){
     if (blank(fout)) fsold.value = "";
-    else fsold.value = Math.max(0, num(fin) - num(fout));
+    else fsold.value = Math.max(0, avail() - num(fout));
     paint();
   }
   /* Sold typed -> work out Out. Blank Sold means nothing to derive from. */
   function fromSold(){
     if (blank(fsold)) fout.value = "";
-    else fout.value = Math.max(0, num(fin) - num(fsold));
+    else fout.value = Math.max(0, avail() - num(fsold));
     paint();
   }
   /* In typed -> only refresh whichever of the other two already has a number */
@@ -858,6 +876,7 @@ function wireCount(itemId){
   fout.addEventListener("input", function(){ lock = "out";  fromOut(); });
   fsold.addEventListener("input", function(){ lock = "sold"; fromSold(); });
   fin.addEventListener("input", fromIn);
+  fadd.addEventListener("input", fromIn);   /* restock reworks the same pair */
 
   /* the go arrow saves and jumps straight to the next item in the group */
   function advance(){
@@ -935,8 +954,10 @@ function saveCount(id){
   if (!fin) return;
   days[view.date] = days[view.date] || {};
   var prev = days[view.date][id] || {};
+  var addEl = document.getElementById("f-add");
   var rec = {
     inQty:   fin.value,
+    addQty:  addEl ? addEl.value : "",
     outQty:  document.getElementById("f-out").value,
     soldQty: document.getElementById("f-sold").value
   };
