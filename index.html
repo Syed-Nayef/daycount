@@ -116,6 +116,10 @@ h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .divider{display:flex;align-items:center;gap:10px;margin:16px 2px 8px;
   font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .divider:after{content:"";flex:1;height:1px;background:var(--line)}
+.movers{display:flex;gap:6px;padding:0 12px 11px}
+.movers button{flex:1;padding:7px 0;border:1px solid var(--line);background:var(--paper);
+  border-radius:8px;font-size:15px;font-weight:700;color:var(--ink)}
+.movers button[disabled]{opacity:.28}
 
 .empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:28px 18px;text-align:center}
 .empty b{display:block;font-size:17px;font-weight:700;margin-bottom:4px}
@@ -483,6 +487,8 @@ function render(){
            "+ Add an entry box</button>";
     h += '<button class="btn wide" style="margin-top:12px" data-a="out-list">'+
          "View all Out counts</button>";
+    h += '<button class="btn wide" style="margin-top:8px" data-a="share-day">'+
+         "Share today&#39;s summary</button>";
     h += '<button class="btn wide" style="margin-top:8px" data-a="backup">'+
          "Backup &amp; restore</button>";
   }
@@ -494,7 +500,7 @@ function render(){
          "<div><b>"+esc(cat.name)+"</b><span>"+money(catTotal(cat.id))+" today</span></div></div>";
 
     var items = config.items.filter(function(i){ return i.catId===cat.id; });
-    items = items.map(function(it, idx){ return { it:it, idx:idx, c:calc(it) }; })
+    if (!view.editing) items = items.map(function(it, idx){ return { it:it, idx:idx, c:calc(it) }; })
       .sort(function(a,b){
         var as = a.c.sold > 0, bs = b.c.sold > 0;
         if (as !== bs) return as ? -1 : 1;  /* sold ones rise */
@@ -510,12 +516,12 @@ function render(){
       items.forEach(function(item){
         var c = calc(item);
         var pct = c.avail>0 ? Math.min(100, c.sold/c.avail*100) : 0;
-        if (c.sold <= 0 && !seenUnsold){
+        if (!view.editing && c.sold <= 0 && !seenUnsold){
           seenUnsold = true;
           if (items.some(function(x){ return calc(x).sold > 0; }))
             h += '</div><div class="divider">Not sold yet</div><div class="rows">';
         }
-        h += '<div class="card'+(c.sold>0?" moved":"")+'"><button class="row" data-a="'+(view.editing?"edit-item":"count")+'" data-id="'+item.id+'">'+
+        h += '<div class="card'+(!view.editing && c.sold>0?" moved":"")+'"><button class="row" data-a="'+(view.editing?"edit-item":"count")+'" data-id="'+item.id+'">'+
              '<div class="rowtop"><b>'+esc(item.name)+'</b><span class="price">@ '+money(item.price)+"</span></div>";
         if (c.counted){
           h += '<div class="stats">'+
@@ -529,7 +535,16 @@ function render(){
         } else {
           h += '<div class="hint">'+(view.editing?"Tap to rename or change the price":"Tap to enter today's count")+"</div>";
         }
-        h += "</button></div>";
+        h += "</button>";
+        if (view.editing){
+          var pos = items.indexOf(item);
+          h += '<div class="movers">'+
+               '<button data-a="move-up" data-id="'+item.id+'"'+(pos===0?" disabled":"")+
+               ">&#9650;</button>"+
+               '<button data-a="move-down" data-id="'+item.id+'"'+
+               (pos===items.length-1?" disabled":"")+">&#9660;</button></div>";
+        }
+        h += "</div>";
       });
       h += "</div>";
       h += '<button class="btn wide" style="margin-top:12px" data-a="new-item">+ Add an item</button>';
@@ -543,31 +558,39 @@ function render(){
   renderInstall();
 }
 
-/* counts = what the shelves say you should have taken.
-   report = what actually came in. Short is red, over is green. */
+/* the figure shown is counts minus the shift report, so a shortfall reads as a
+   positive "this much is missing". the colour still follows the shift side:
+   report below counts is red, above is green. */
+function diffState(){
+  var gap = grandTotal() - reportTotal();
+  var side = reportTotal() - grandTotal();
+  return {
+    gap: gap,
+    cls:  side > 0.004 ? "up"  : (side < -0.004 ? "down" : "flat"),
+    sign: gap  > 0.004 ? "+"   : (gap  < -0.004 ? "\u2212" : ""),
+    word: side < -0.004 ? "short" : (side > 0.004 ? "over" : "level")
+  };
+}
+
 function diffCardHTML(){
-  var d = reportTotal() - grandTotal();
-  var cls = d > 0.004 ? "up" : (d < -0.004 ? "down" : "flat");
-  var sign = d > 0.004 ? "+" : (d < -0.004 ? "\u2212" : "");
-  return '<div class="diffcard"><div><div class="k">Shift report \u2212 counts</div>'+
+  var st = diffState();
+  var d = st.gap, cls = st.cls, sign = st.sign;
+  return '<div class="diffcard"><div><div class="k">Counts \u2212 shift report</div>'+
          '<div class="sub" id="d-sub">'+diffSub()+"</div></div>"+
          '<div class="v '+cls+'" id="d-val">'+sign+money(Math.abs(d))+"</div></div>";
 }
 
 function diffSub(){
-  var d = reportTotal() - grandTotal();
-  var word = d > 0.004 ? "over" : (d < -0.004 ? "short" : "level");
-  return money(reportTotal()) + " \u2212 " + money(grandTotal()) + "  \u00b7  " + word;
+  return money(grandTotal()) + " \u2212 " + money(reportTotal()) +
+         "  \u00b7  " + diffState().word;
 }
 
 function paintDiff(){
   var val = document.getElementById("d-val");
   if (!val) return;
-  var d = reportTotal() - grandTotal();
-  var cls = d > 0.004 ? "up" : (d < -0.004 ? "down" : "flat");
-  var sign = d > 0.004 ? "+" : (d < -0.004 ? "\u2212" : "");
-  val.className = "v " + cls;
-  val.textContent = sign + money(Math.abs(d));
+  var st = diffState();
+  val.className = "v " + st.cls;
+  val.textContent = st.sign + money(Math.abs(st.gap));
   document.getElementById("d-sub").textContent = diffSub();
 }
 
@@ -717,6 +740,16 @@ function renderSheet(){
          '<button class="btn solid" data-a="close">Close</button></div>';
   }
 
+  if (s.kind === "copy"){
+    h += "<h2>Day summary</h2>"+
+         '<textarea readonly style="width:100%;height:280px;padding:12px;border-radius:10px;'+
+         'border:1px solid var(--line);background:var(--paper);font-family:var(--mono);'+
+         'font-size:12px;line-height:1.5;color:var(--ink)">'+esc(daySummary())+"</textarea>"+
+         '<p class="note">Press and hold to select, then copy.</p>'+
+         '<div class="actions"><div class="spacer"></div>'+
+         '<button class="btn solid" data-a="close">Close</button></div>';
+  }
+
   if (s.kind === "backup"){
     var nDays = Object.keys(days).length;
     h += "<h2>Backup &amp; restore</h2>";
@@ -787,6 +820,16 @@ function renderSheet(){
   m.innerHTML = h + "</div></div>";
 
   if (s.kind === "count") wireCount(s.id);
+  if (s.kind === "copy"){
+    h += "<h2>Day summary</h2>"+
+         '<textarea readonly style="width:100%;height:280px;padding:12px;border-radius:10px;'+
+         'border:1px solid var(--line);background:var(--paper);font-family:var(--mono);'+
+         'font-size:12px;line-height:1.5;color:var(--ink)">'+esc(daySummary())+"</textarea>"+
+         '<p class="note">Press and hold to select, then copy.</p>'+
+         '<div class="actions"><div class="spacer"></div>'+
+         '<button class="btn solid" data-a="close">Close</button></div>';
+  }
+
   if (s.kind === "backup"){
     var fr = document.getElementById("f-restore");
     if (fr) fr.addEventListener("change", function(ev){
@@ -923,6 +966,66 @@ function carryIn(itemId){
   return null;
 }
 
+/* a plain-text rundown of the day, for sending on to whoever needs it */
+function daySummary(){
+  var L = [], s = sheetFor();
+  L.push("DAY COUNT - " + pretty(view.date) + " (" + view.date + ")");
+
+  config.categories.forEach(function(k){
+    var list = config.items.filter(function(i){ return i.catId === k.id; });
+    if (!list.length) return;
+    L.push("");
+    L.push(k.name.toUpperCase());
+    list.forEach(function(it){
+      var c = calc(it);
+      if (!c.counted) { L.push("  " + it.name + ": not counted"); return; }
+      L.push("  " + it.name + ": in " + c.inQty +
+             (c.addQty > 0 ? " +" + c.addQty : "") +
+             ", left " + c.left + ", sold " + c.sold + " = " + money(c.amount));
+    });
+    L.push("  " + k.name + " total: " + money(catTotal(k.id)));
+  });
+
+  if (has(s.totalSale)) { L.push(""); L.push("Total sale: " + money(s.totalSale)); }
+  (config.extras || []).forEach(function(x){
+    if (has(s["x_" + x.id])) L.push(x.name + ": " + money(s["x_" + x.id]));
+  });
+  L.push("COUNTS TOTAL: " + money(grandTotal()));
+
+  L.push("");
+  L.push("SHIFT REPORT");
+  REPORT_ROWS.forEach(function(r){
+    var v = r.id === "cash" ? evalExpr(s.cash) : (Number(s[r.id]) || 0);
+    L.push("  " + r.label + ": " + money(v));
+  });
+  L.push("  TOTAL AMOUNTS: " + money(reportTotal()));
+
+  var st = diffState();
+  L.push("");
+  L.push("DIFFERENCE: " + st.sign + money(Math.abs(st.gap)) + " (" + st.word + ")");
+  return L.join("\n");
+}
+
+function shareDay(){
+  var text = daySummary();
+  if (navigator.share){
+    navigator.share({ title: "Day Count " + view.date, text: text })
+      .catch(function(){ copyDay(text); });
+    return;
+  }
+  copyDay(text);
+}
+
+function copyDay(text){
+  var done = function(){ notice = "Day summary copied to the clipboard."; render(); };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, function(){ view.sheet = {kind:"copy"}; render(); });
+  } else {
+    view.sheet = { kind:"copy" };
+    render();
+  }
+}
+
 function exportBackup(){
   var blob = new Blob([JSON.stringify({
     format: "daycount-backup-1",
@@ -992,6 +1095,21 @@ document.addEventListener("click", function(ev){
     case "edit-cat":    view.draft = null; view.sheet = {kind:"cat", id:id}; break;
     case "add-cat":
       config.categories.push({ id:uid(), name:"New group", image:null }); saveConfig(); break;
+    case "move-up": case "move-down":
+      (function(){
+        var me = config.items.filter(function(i){ return i.id === id; })[0];
+        if (!me) return;
+        var sibs = config.items.filter(function(i){ return i.catId === me.catId; });
+        var at = sibs.indexOf(me);
+        var to = a === "move-up" ? at - 1 : at + 1;
+        if (to < 0 || to >= sibs.length) return;
+        var A = config.items.indexOf(sibs[at]);
+        var B = config.items.indexOf(sibs[to]);
+        var tmp = config.items[A]; config.items[A] = config.items[B]; config.items[B] = tmp;
+        saveConfig();
+      })();
+      break;
+
     case "add-extra":
       config.extras = config.extras || [];
       config.extras.push({ id:uid(), name:"New box" });
@@ -1002,6 +1120,7 @@ document.addEventListener("click", function(ev){
     case "count":       view.sheet = {kind:"count", id:id}; break;
     case "out-list":    view.sheet = {kind:"outlist"}; break;
     case "backup":      view.pending = null; view.sheet = {kind:"backup"}; break;
+    case "share-day":   shareDay(); return;
     case "cancel-restore": view.pending = null; break;
     case "do-export":   exportBackup(); return;
     case "do-restore":
