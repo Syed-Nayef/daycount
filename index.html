@@ -164,6 +164,8 @@ label.f.auto input{background:var(--soft);border-style:dashed}
 .ops button{flex:1;padding:9px 0;border:1px solid var(--line);background:var(--paper);
   border-radius:9px;font-family:var(--mono);font-size:17px;font-weight:600;color:var(--ink)}
 .ops button.clr{color:var(--clay);border-color:var(--clay)}
+.soldbar{display:flex;align-items:center;gap:10px;margin-top:7px}
+.soldbar .eq{flex:1;text-align:left;margin-top:0}
 .eq{font-family:var(--mono);font-size:13px;color:var(--green);font-weight:600;
   text-align:right;margin-top:7px;min-height:16px}
 .salecard .lbl{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -695,6 +697,7 @@ function renderSheet(){
     var c0 = calc(item);
     var soldStart = has(e.soldQty) ? e.soldQty
                   : (has(e.outQty) ? c0.sold : "");
+    var soldPrefill = (soldStart !== "" && Number(soldStart) > 0) ? soldStart + "+" : soldStart;
     var inStart = e.inQty, carried = null;
     if (!has(inStart)){
       carried = carryIn(item.id);
@@ -709,7 +712,9 @@ function renderSheet(){
          "</div>"+
          '<div class="soldwrap"><label class="f" id="w-sold"><span class="k">Sold</span>'+
          '<input id="f-sold" class="num" inputmode="decimal" enterkeyhint="next" '+
-         'placeholder="0" value="'+esc(soldStart)+'"></label></div>'+
+         'placeholder="0" value="'+esc(soldPrefill)+'"></label>'+
+         '<div class="soldbar"><div class="eq" id="sold-eq"></div>'+
+         '<button id="f-soldclr" class="btn sm">Clear</button></div></div>'+
          '<div class="soldwrap"><label class="f"><span class="k">Additional stock &mdash; optional</span>'+
          '<input id="f-add" class="num" inputmode="decimal" tabindex="-1" '+
          'enterkeyhint="next" placeholder="0" value="'+esc(e.addQty)+'"></label></div>'+
@@ -873,12 +878,15 @@ function wireCount(itemId){
   function num(el){ return Number(el.value) || 0; }
   function blank(el){ return el.value.trim() === ""; }
   function avail(){ return num(fin) + num(fadd); }
+  function soldVal(){ return Math.max(0, evalExpr(fsold.value)); }
 
   function paint(){
     wout.className  = "f" + (lock === "sold" ? " auto" : "");
     wsold.className = "f" + (lock === "out"  ? " auto" : "");
-    var sold = Math.max(0, num(fsold));
+    var sold = soldVal();
     var amt  = sold * (Number(item.price)||0);
+    var eq = document.getElementById("sold-eq");
+    if (eq) eq.textContent = isExpr(fsold.value) ? "= " + sold : "";
     document.getElementById("p-calc").textContent = sold + " \u00d7 " + money(item.price) +
       (num(fadd) > 0 ? "   (" + num(fin) + " + " + num(fadd) + " out)" : "");
     document.getElementById("p-amt").textContent  = money(amt);
@@ -893,7 +901,7 @@ function wireCount(itemId){
   /* Sold typed -> work out Out. Blank Sold means nothing to derive from. */
   function fromSold(){
     if (blank(fsold)) fout.value = "";
-    else fout.value = Math.max(0, avail() - num(fsold));
+    else fout.value = Math.max(0, avail() - soldVal());
     paint();
   }
   /* In typed -> only refresh whichever of the other two already has a number */
@@ -927,6 +935,13 @@ function wireCount(itemId){
   /* the go arrow works here too, even though tabbing skips this box */
   fadd.addEventListener("keydown", function(ev){
     if (ev.key === "Enter"){ ev.preventDefault(); advance(); }
+  });
+
+  var clr = document.getElementById("f-soldclr");
+  if (clr) clr.addEventListener("click", function(ev){
+    ev.preventDefault();
+    fsold.value = ""; lock = "sold"; fromSold();
+    fsold.focus();
   });
 
   paint();
@@ -990,11 +1005,12 @@ function saveCount(id){
   days[view.date] = days[view.date] || {};
   var prev = days[view.date][id] || {};
   var addEl = document.getElementById("f-add");
+  var sRaw  = document.getElementById("f-sold").value;
   var rec = {
     inQty:   fin.value,
     addQty:  addEl ? addEl.value : "",
     outQty:  document.getElementById("f-out").value,
-    soldQty: document.getElementById("f-sold").value
+    soldQty: sRaw.trim() === "" ? "" : String(Math.max(0, evalExpr(sRaw)))
   };
   if (derive(rec).sold > 0){
     /* keep the original stamp so the row doesn't jump when you edit it later */
@@ -1148,8 +1164,9 @@ document.addEventListener("focusin", function(ev){
   if (!el || el.tagName !== "INPUT" || el.type === "file") return;
   setTimeout(function(){
     try {
-      if (el.id === "r-cash"){ var n = el.value.length; el.setSelectionRange(n, n); }
-      else el.select();
+      if (el.id === "r-cash" || el.id === "f-sold"){
+        var n = el.value.length; el.setSelectionRange(n, n);
+      } else el.select();
     } catch(e){}
   }, 0);
 });
