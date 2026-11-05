@@ -42,6 +42,8 @@ h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .tabs button{flex:1;border:none;background:none;padding:10px 8px;border-radius:9px;
   font-size:14px;font-weight:600;color:var(--muted)}
 .tabs button.on{background:var(--ink);color:#fff}
+.tabs.modes button{padding:9px 8px}
+label.f input.num.big{font-size:32px;padding:14px 16px}
 
 .datestrip{display:flex;align-items:center;justify-content:space-between;background:var(--panel);
   border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-bottom:14px}
@@ -469,7 +471,8 @@ function render(){
                '<div class="big">'+tot+"</div></div>")+
            "</div>"+
            '<div class="meta"><b>'+esc(k.name)+"</b>"+
-           '<div class="sub">'+config.items.filter(function(i){return i.catId===k.id;}).length+" items</div>"+
+           '<div class="sub">'+config.items.filter(function(i){return i.catId===k.id;}).length+" items"+
+           (layoutOf(k.id)==="sold"?" &middot; sold only":"")+"</div>"+
            "</div></button>";
       if (view.editing)
         h += '<div style="padding:0 12px 12px"><button class="btn wide" style="padding:8px;font-size:13px" data-a="edit-cat" data-id="'+k.id+'">Edit group</button></div>';
@@ -511,6 +514,12 @@ function render(){
          (cat.image?"":"<i>"+esc(cat.name.slice(0,2).toUpperCase())+"</i>")+"</div>"+
          "<div><b>"+esc(cat.name)+"</b><span>"+money(catTotal(cat.id))+" today</span></div></div>";
 
+    var solo = layoutOf(cat.id) === "sold";
+    h += '<div class="tabs modes">'+
+         '<button class="'+(solo?"":"on")+'" data-a="set-layout" data-id="inout">In / Out</button>'+
+         '<button class="'+(solo?"on":"")+'" data-a="set-layout" data-id="sold">Sold only</button>'+
+         "</div>";
+
     var items = config.items.filter(function(i){ return i.catId===cat.id; });
     if (!view.editing) items = items.map(function(it, idx){ return { it:it, idx:idx, c:calc(it) }; })
       .sort(function(a,b){
@@ -535,7 +544,7 @@ function render(){
         }
         h += '<div class="card'+(!view.editing && c.sold>0?" moved":"")+'"><button class="row" data-a="'+(view.editing?"edit-item":"count")+'" data-id="'+item.id+'">'+
              '<div class="rowtop"><b>'+esc(item.name)+'</b><span class="price">@ '+money(item.price)+"</span></div>";
-        if (c.counted){
+        if (!solo && c.counted){
           h += '<div class="stats">'+
                '<div class="stat"><div class="k">In</div><div class="v">'+c.inQty+
                  (c.addQty>0?' <span style="color:var(--green);font-size:13px">+'+c.addQty+"</span>":"")+
@@ -544,8 +553,13 @@ function render(){
                '<div class="stat big"><div class="k">Sold</div><div class="v">'+c.sold+"</div></div>"+
                '<div class="spacer"></div><div class="rowamt">'+money(c.amount)+"</div></div>"+
                '<div class="bar"><i style="width:'+pct+'%"></i></div>';
+        } else if (c.sold > 0){
+          h += '<div class="stats">'+
+               '<div class="stat big"><div class="k">Sold</div><div class="v">'+c.sold+"</div></div>"+
+               '<div class="spacer"></div><div class="rowamt">'+money(c.amount)+"</div></div>";
         } else {
-          h += '<div class="hint">'+(view.editing?"Tap to rename or change the price":"Tap to enter today's count")+"</div>";
+          h += '<div class="hint">'+(view.editing?"Tap to rename or change the price":
+               (solo?"Tap to enter sold":"Tap to enter today's count"))+"</div>";
         }
         h += "</button>";
         if (view.editing){
@@ -727,6 +741,24 @@ function renderSheet(){
          '<button class="btn solid" style="flex:2" data-a="save-count" data-id="'+item.id+'">Save count</button></div>';
   }
 
+  if (s.kind === "solo"){
+    var sit = config.items.filter(function(i){ return i.id===s.id; })[0];
+    var sNow = calc(sit).sold;
+    h += "<h2>"+esc(sit.name)+' <span style="font-family:var(--mono);font-size:14px;'+
+         'font-weight:600;color:var(--muted)">@ '+money(sit.price)+"</span></h2>"+
+         '<label class="f"><span class="k">Sold</span>'+
+         '<input id="f-solo" class="num big" inputmode="decimal" enterkeyhint="next" '+
+         'placeholder="0" value="'+esc(sNow > 0 ? sNow + "+" : "")+'"></label>'+
+         '<div class="soldbar"><div class="eq" id="solo-eq"></div>'+
+         '<button id="solo-plus" class="btn sm">+</button>'+
+         '<button id="solo-clr" class="btn sm">Clear</button></div>'+
+         '<div class="preview"><div><div class="k">Amount</div>'+
+         '<div class="calc" id="solo-calc"></div></div>'+
+         '<div class="spacer"></div><div class="amt" id="solo-amt">0.00</div></div>'+
+         '<div class="actions"><button class="btn" style="flex:1" data-a="close">Cancel</button>'+
+         '<button class="btn solid" style="flex:2" data-a="save-solo" data-id="'+sit.id+'">Save</button></div>';
+  }
+
   if (s.kind === "outlist"){
     h += "<h2>Out counts &mdash; "+pretty(view.date)+"</h2>";
     var any = false;
@@ -735,6 +767,10 @@ function renderSheet(){
       if (!list.length) return;
       any = true;
       h += '<div class="divider" style="margin-top:14px">'+esc(k.name)+"</div>";
+      if (layoutOf(k.id) === "sold"){
+        h += '<p class="note" style="margin:0 2px">Sold only &mdash; this group has no Out counts.</p>';
+        return;
+      }
       h += '<div class="card">';
       list.forEach(function(it){
         var c = calc(it);
@@ -807,12 +843,13 @@ function renderSheet(){
          '<label class="f"><span class="k">Group name</span>'+
          '<input id="f-catname" placeholder="OL" value="'+
          esc(view.draft && view.draft.name !== undefined ? view.draft.name : k.name)+'"></label>'+
+         (layoutOf(k.id) === "sold" ? "" :
          '<div style="margin-top:14px"><span class="k" style="display:block;font-size:11px;'+
          'letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600;'+
          'margin-bottom:6px">Keyboard opens in</span><div class="pick">'+
          '<button class="'+(ff==="sold"?"on":"")+'" data-a="pick-focus" data-id="sold">Sold</button>'+
          '<button class="'+(ff==="out"?"on":"")+'" data-a="pick-focus" data-id="out">Out</button>'+
-         "</div></div>"+
+         "</div></div>")+
          '<div class="actions">'+
          (config.categories.length>1?'<button class="btn danger" data-a="del-cat" data-id="'+k.id+'">Delete</button>':"")+
          '<div class="spacer"></div><button class="btn" data-a="close">Cancel</button>'+
@@ -822,6 +859,7 @@ function renderSheet(){
   m.innerHTML = h + "</div></div>";
 
   if (s.kind === "count") wireCount(s.id);
+  if (s.kind === "solo")  wireSolo(s.id);
 
   if (s.kind === "backup"){
     var fr = document.getElementById("f-restore");
@@ -985,6 +1023,16 @@ function exportBackup(){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
 }
 
+/* each group remembers its layout: "inout" (In / Out / Sold) or "sold" (Sold only) */
+function layoutOf(catId){
+  var k = config.categories.filter(function(c){ return c.id === catId; })[0];
+  return k && k.layout === "sold" ? "sold" : "inout";
+}
+function isSoloItem(itemId){
+  var it = config.items.filter(function(i){ return i.id === itemId; })[0];
+  return !!it && layoutOf(it.catId) === "sold";
+}
+
 /* groups named CG start on Out by default; everything else starts on Sold */
 function startField(catId){
   var k = config.categories.filter(function(c){ return c.id === catId; })[0];
@@ -997,6 +1045,71 @@ function nextSeq(){
   var e = entriesFor(), top = 0;
   Object.keys(e).forEach(function(k){ top = Math.max(top, Number(e[k].seq) || 0); });
   return top + 1;
+}
+
+/* Sold-only sheet: one box, running tally, go arrow saves and opens the next item */
+function wireSolo(itemId){
+  var item = config.items.filter(function(i){ return i.id===itemId; })[0];
+  var fs = document.getElementById("f-solo");
+  if (!item || !fs) return;
+
+  function paint(){
+    var sold = Math.max(0, evalExpr(fs.value));
+    document.getElementById("solo-eq").textContent = isExpr(fs.value) ? "= " + sold : "";
+    document.getElementById("solo-calc").textContent = sold + " × " + money(item.price);
+    document.getElementById("solo-amt").textContent = money(sold * (Number(item.price)||0));
+  }
+  function toEnd(){
+    fs.focus();
+    try { var n = fs.value.length; fs.setSelectionRange(n, n); } catch(e){}
+  }
+  function advance(){
+    var list = config.items.filter(function(i){ return i.catId === item.catId; });
+    var at = -1;
+    list.forEach(function(x, n){ if (x.id === itemId) at = n; });
+    var next = at > -1 ? list[at + 1] : null;
+    saveSolo(itemId);
+    if (next){ view.sheet = { kind:"solo", id: next.id }; renderSheet(); }
+  }
+
+  fs.addEventListener("input", paint);
+  fs.addEventListener("keydown", function(ev){
+    if (ev.key === "Enter"){ ev.preventDefault(); advance(); }
+  });
+  document.getElementById("solo-plus").addEventListener("click", function(ev){
+    ev.preventDefault();
+    var v = fs.value.replace(/[+\-*\/]$/, "");
+    fs.value = v === "" ? "" : v + "+";
+    paint(); toEnd();
+  });
+  document.getElementById("solo-clr").addEventListener("click", function(ev){
+    ev.preventDefault();
+    fs.value = ""; paint(); toEnd();
+  });
+
+  paint();
+  setTimeout(function(){ fs.focus(); }, 50);
+}
+
+function saveSolo(id){
+  var fs = document.getElementById("f-solo");
+  if (!fs) return;
+  days[view.date] = days[view.date] || {};
+  var prev = days[view.date][id] || {};
+  var rec = {};
+  Object.keys(prev).forEach(function(p){ rec[p] = prev[p]; });   /* keep any In / added stock */
+  var raw = fs.value.trim();
+  rec.soldQty = raw === "" ? "" : String(Math.max(0, evalExpr(raw)));
+  if (has(rec.inQty)){
+    /* keeps the In / Out view consistent if you switch back later */
+    rec.outQty = rec.soldQty === "" ? "" :
+      String(Math.max(0, (Number(rec.inQty)||0) + (Number(rec.addQty)||0) - Number(rec.soldQty)));
+  }
+  if (derive(rec).sold > 0) rec.seq = prev.seq || nextSeq();
+  days[view.date][id] = rec;
+  saveDays();
+  view.sheet = null;
+  render();
 }
 
 function saveCount(id){
@@ -1061,7 +1174,7 @@ document.addEventListener("click", function(ev){
     case "del-extra":
       config.extras = (config.extras || []).filter(function(x){ return x.id !== id; });
       saveConfig(); break;
-    case "count":       view.sheet = {kind:"count", id:id}; break;
+    case "count":       view.sheet = {kind: isSoloItem(id) ? "solo" : "count", id:id}; break;
     case "out-list":    view.sheet = {kind:"outlist"}; break;
     case "backup":      view.pending = null; view.sheet = {kind:"backup"}; break;
     case "cancel-restore": view.pending = null; break;
@@ -1081,6 +1194,17 @@ document.addEventListener("click", function(ev){
     case "close": case "close-scrim": view.sheet = null; view.draft = null; break;
 
     case "save-count": saveCount(id); break;
+    case "save-solo":  saveSolo(id); return;
+
+    case "set-layout":
+      config.categories = config.categories.map(function(k){
+        if (k.id !== view.cat) return k;
+        var o = {};
+        Object.keys(k).forEach(function(p){ o[p] = k[p]; });
+        o.layout = id;
+        return o;
+      });
+      saveConfig(); break;
 
     case "save-item":
       var nm = document.getElementById("f-name").value.trim();
@@ -1138,7 +1262,8 @@ document.addEventListener("click", function(ev){
           id: k.id,
           name: cname || k.name,
           image: cimg !== undefined ? cimg : k.image,
-          focusField: cff || k.focusField || startField(k.id)
+          focusField: cff || k.focusField || startField(k.id),
+          layout: k.layout
         };
       });
       saveConfig(); view.sheet = null; view.draft = null; break;
@@ -1164,7 +1289,7 @@ document.addEventListener("focusin", function(ev){
   if (!el || el.tagName !== "INPUT" || el.type === "file") return;
   setTimeout(function(){
     try {
-      if (el.id === "r-cash" || el.id === "f-sold"){
+      if (el.id === "r-cash" || el.id === "f-sold" || el.id === "f-solo"){
         var n = el.value.length; el.setSelectionRange(n, n);
       } else el.select();
     } catch(e){}
